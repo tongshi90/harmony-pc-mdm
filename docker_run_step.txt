@@ -1,0 +1,13 @@
+# 镜像打包
+docker build -t harmony-pc-mdm:latest .
+
+# 赋予权限
+mkdir -p /home/p40/ts/harmony-pc-mdm/uploads
+
+# 启动
+docker run -d \
+  --name harmony-pc-mdm \
+  --restart unless-stopped \
+  -p 8086:8080 \
+  -v /home/p40/ts/harmony-pc-mdm:/app/data \
+  harmony-pc-mdm:latest

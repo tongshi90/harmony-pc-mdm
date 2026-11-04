@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- 立体安装包：上盖 + 盒身 -->
+  <path d="M12 24L32 14L52 24L32 34L12 24Z" fill="#5EEAD4" stroke="#0F766E" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M12 24V42L32 52V34L12 24Z" fill="#99F6E4" stroke="#0F766E" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M52 24V42L32 52V34L52 24Z" fill="#2DD4BF" stroke="#0F766E" stroke-width="2" stroke-linejoin="round"/>
+  <!-- 密封条 -->
+  <path d="M32 14V34" stroke="#0F766E" stroke-width="2" stroke-linecap="round"/>
+  <!-- 下载/安装箭头 -->
+  <circle cx="32" cy="40" r="9" fill="#0D9488"/>
+  <path d="M32 35.5V43.5M32 43.5L28.5 40M32 43.5L35.5 40" stroke="#ECFDF5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

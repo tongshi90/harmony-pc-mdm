@@ -1,0 +1,58 @@
+/* Harmony PC MDM · 设计令牌（B 端精简）
+ * 不引用外网字体：@import 会阻塞解析。
+ */
+:root {
+  --ink: #0b1220;
+  --ink-2: #334155;
+  --mute: #64748b;
+  --line: #e2e8f0;
+  --paper: #ffffff;
+  --canvas: #f1f5f9;
+  --teal: #0f766e;
+  --teal-bright: #14b8a6;
+  --teal-soft: #ccfbf1;
+  --amber: #b45309;
+  --amber-soft: #ffedd5;
+  --blue: #0369a1;
+  --blue-soft: #e0f2fe;
+
+  --bg: var(--canvas);
+  --surface: var(--paper);
+  --surface-2: #f8fafc;
+  --border: var(--line);
+  --text: var(--ink);
+  --text-secondary: var(--mute);
+  --primary: var(--teal);
+  --primary-hover: #0d9488;
+  --success: var(--teal);
+  --warning: var(--amber);
+  --error: #b91c1c;
+  --primary-glow: rgba(15, 118, 110, 0.14);
+  --radius: 8px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.06);
+  --header-height: 52px;
+  --brand-width: 280px;
+  --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", "SF Mono", ui-monospace, monospace;
+
+  --sidebar-width: 0px;
+  --sidebar-bg: var(--ink);
+  --sidebar-text: rgba(255, 255, 255, 0.62);
+  --sidebar-text-active: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+}
+
+.stat-card .value,
+.sum-card .v {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.stat-card.accent-green .value,
+.sum-card.s2 .v { color: var(--teal); }
+.stat-card.accent-gray .value,
+.sum-card.s3 .v { color: var(--mute); }
+.stat-card.accent-red .value,
+.sum-card.s4 .v { color: var(--error); }
+.sum-card.s5 .v { color: var(--amber); }
