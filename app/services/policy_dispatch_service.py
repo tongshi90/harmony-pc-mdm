@@ -518,7 +518,7 @@ def list_target_members(
         )
     total = q.count()
     rows = (
-        q.order_by(SysMember.name.asc(), SysMember.id.asc())
+        q.order_by(SysMember.employee_id.asc(), SysMember.id.asc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

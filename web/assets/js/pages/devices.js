@@ -128,7 +128,8 @@
           ${retryBtn}
           <button class="link-btn solid btn-dispatch-policy" type="button"
             data-member-id="${escapeHtml(d.member_id || '')}"
-            data-member-name="${escapeHtml(d.member_name || '')}">下发</button>
+            data-member-name="${escapeHtml(d.member_name || '')}"
+            data-employee-id="${escapeHtml(d.employee_id || '')}">下发</button>
           <a class="link-btn" href="${U.href('deviceDetail', { sn: d.sn })}">详情</a>
         </div>`;
       }
@@ -164,7 +165,7 @@
             <button class="chip${chip === 'noncompliant' ? ' is-on' : ''}" type="button" data-chip="noncompliant">不合规</button>
           </div>
           <div class="spacer"></div>
-          <span class="count">显示 ${list.length} / 共 ${U.fmt(total)} 台</span>
+          <button type="button" class="btn btn-primary" id="btn-register-device">登记设备</button>
         </div>
         <table class="data-table">
           <thead>
@@ -181,10 +182,7 @@
           </thead>
           <tbody>${rows}</tbody>
         </table>
-        <div class="panel-foot">
-          <span>第 ${page} 页 · 每页 ${pageSize} 台</span>
-          <div id="device-pagination">${U.pagination(total, page, pageSize, { unit: '台', pageItems: list.length })}</div>
-        </div>
+        <div id="device-pagination">${U.pagination(total, page, pageSize, { unit: '台', pageItems: list.length })}</div>
       </section>`;
   }
 
@@ -303,7 +301,6 @@
   MDMLayout.mount({
     pageId: 'devices',
     title: '设备管理',
-    actions: `<button type="button" class="btn btn-primary" id="btn-register-device">登记设备</button>`,
     content: `
       <div id="device-summary-wrap">${summaryHtml()}</div>
       <div id="device-list">${tableHtml()}</div>`,
@@ -319,11 +316,14 @@
         bindList();
       }
 
-      document.getElementById('btn-register-device')?.addEventListener('click', () => {
-        openRegisterModal(() => refresh({ reloadStats: true }));
-      });
+      function bindRegisterBtn() {
+        document.getElementById('btn-register-device')?.addEventListener('click', () => {
+          openRegisterModal(() => refresh({ reloadStats: true }));
+        });
+      }
 
       function bindList() {
+        bindRegisterBtn();
         document.querySelectorAll('#device-chips .chip').forEach(btn => {
           btn.addEventListener('click', () => {
             const next = btn.dataset.chip || '';
@@ -373,10 +373,12 @@
               return;
             }
             const memberName = (btn.dataset.memberName || '').trim() || '未知用户';
+            const employeeId = (btn.dataset.employeeId || '').trim();
             location.href = U.href('sceneDispatchCreate', {
               targetType: 'member',
               memberId: btn.dataset.memberId,
               memberName,
+              employeeId,
               taskName: `${memberName}的设备策略下发`
             });
           });

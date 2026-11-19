@@ -15,6 +15,7 @@ class MenuCode(str, Enum):
     MEMBER_GROUP = "member_group"
     APP = "app"
     POLICY_DISPATCH = "policy_dispatch"
+    RAG = "rag"
     PLATFORM = "platform"
 
 
@@ -86,6 +87,15 @@ _MENU_ITEMS: tuple[MenuItem, ...] = (
         href="/pages/scenes/scene-dispatch.html",
         group="策略中心",
         sort=60,
+    ),
+    MenuItem(
+        code=MenuCode.RAG.value,
+        name="知识库问答",
+        api_prefix="/platform/rag",
+        nav_id="rag",
+        href="/pages/rag/knowledge-bases.html",
+        group="知识服务",
+        sort=65,
     ),
     MenuItem(
         code=MenuCode.PLATFORM.value,

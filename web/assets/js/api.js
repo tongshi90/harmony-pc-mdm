@@ -238,6 +238,18 @@
     deleteMdmVersion(id) {
       return request(`${PLATFORM}/mdm-app/versions/${id}`, { method: 'DELETE' });
     },
+    listMdmTargetGroups(params = {}) {
+      const q = new URLSearchParams();
+      if (params.keyword) q.set('keyword', params.keyword);
+      const qs = q.toString();
+      return request(`${PLATFORM}/mdm-app/target-groups${qs ? `?${qs}` : ''}`);
+    },
+    batchUpgradeMdm(versionId, payload) {
+      return request(`${PLATFORM}/mdm-app/versions/${versionId}/batch-upgrade`, {
+        method: 'POST',
+        body: payload
+      });
+    },
     async uploadMdmPackage(versionId, file) {
       const headers = {};
       const token = getToken();
@@ -722,6 +734,170 @@
     /** 数据看板总览 */
     getDashboardOverview() {
       return request('/platform/dashboard/overview');
+    },
+
+    // ---------- 知识库问答（RAG）----------
+    listRagKnowledgeBases(params = {}) {
+      const q = new URLSearchParams();
+      if (params.keyword) q.set('keyword', params.keyword);
+      return request(`/platform/rag/knowledge-bases?${q.toString()}`);
+    },
+    getRagKnowledgeBase(id) {
+      return request(`/platform/rag/knowledge-bases/${id}`);
+    },
+    createRagKnowledgeBase(payload) {
+      return request('/platform/rag/knowledge-bases', { method: 'POST', body: payload });
+    },
+    updateRagKnowledgeBase(id, payload) {
+      return request(`/platform/rag/knowledge-bases/${id}`, { method: 'PUT', body: payload });
+    },
+    deleteRagKnowledgeBase(id) {
+      return request(`/platform/rag/knowledge-bases/${id}`, { method: 'DELETE' });
+    },
+    listRagFiles(kbId, params = {}) {
+      const q = new URLSearchParams();
+      q.set('page', String(params.page || 1));
+      q.set('page_size', String(params.page_size || 20));
+      return request(`/platform/rag/knowledge-bases/${kbId}/files?${q.toString()}`);
+    },
+    async uploadRagFile(kbId, file) {
+      const items = await this.uploadRagFiles(kbId, [file]);
+      return Array.isArray(items) ? items[0] : items;
+    },
+    /** 批量上传知识库文件（同库服务端串行解析排队） */
+    async uploadRagFiles(kbId, fileList) {
+      const token = getToken();
+      const files = Array.from(fileList || []).filter(Boolean);
+      if (!files.length) throw new Error('请选择要上传的文件');
+      const fd = new FormData();
+      files.forEach(f => fd.append('files', f));
+      const resp = await fetch(`/platform/rag/knowledge-bases/${kbId}/files/upload`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd
+      });
+      let data;
+      try {
+        data = await resp.json();
+      } catch {
+        throw new Error('服务器响应异常');
+      }
+      if (resp.status === 401 || data.code === 401) {
+        clearSession();
+        if (!location.pathname.endsWith('/login.html')) location.href = '/login.html';
+        throw new Error(data.message || '未登录');
+      }
+      if (data.code !== 0) throw new Error(data.message || '上传失败');
+      return data.data;
+    },
+    deleteRagFile(kbId, fileId) {
+      return request(`/platform/rag/knowledge-bases/${kbId}/files/${fileId}`, { method: 'DELETE' });
+    },
+    listRagFileChunks(kbId, fileId) {
+      return request(`/platform/rag/knowledge-bases/${kbId}/files/${fileId}/chunks`);
+    },
+    updateRagFileChunk(kbId, fileId, chunkId, text) {
+      return request(
+        `/platform/rag/knowledge-bases/${kbId}/files/${fileId}/chunks/${encodeURIComponent(chunkId)}`,
+        { method: 'PUT', body: { text } }
+      );
+    },
+    ragAsk(payload) {
+      return request('/platform/rag/ask', { method: 'POST', body: payload });
+    },
+    /**
+     * 管理台流式提问（SSE）。
+     * handlers: onStatus / onMeta / onDelta / onFinal / onError
+     * 返回最终 final 载荷（与 ragAsk data 同构）；失败抛错。
+     */
+    async ragAskStream(payload, handlers = {}) {
+      const token = getToken();
+      const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream'
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const resp = await fetch('/platform/rag/ask/stream', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload || {})
+      });
+
+      if (resp.status === 401) {
+        clearSession();
+        if (!location.pathname.endsWith('/login.html')) {
+          location.href = '/login.html';
+        }
+        throw new Error('未登录');
+      }
+      if (!resp.ok) {
+        let msg = `提问失败 (${resp.status})`;
+        try {
+          const errBody = await resp.json();
+          if (errBody && errBody.message) msg = errBody.message;
+        } catch (_) { /* ignore */ }
+        throw new Error(msg);
+      }
+      if (!resp.body) throw new Error('浏览器不支持流式响应');
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let finalData = null;
+      let streamError = null;
+
+      const dispatch = (eventName, data) => {
+        if (eventName === 'status' && handlers.onStatus) handlers.onStatus(data);
+        else if (eventName === 'meta' && handlers.onMeta) handlers.onMeta(data);
+        else if (eventName === 'answer_delta' && handlers.onDelta) {
+          handlers.onDelta(data && data.text != null ? String(data.text) : '');
+        } else if (eventName === 'final') {
+          finalData = data;
+          if (handlers.onFinal) handlers.onFinal(data);
+        } else if (eventName === 'error') {
+          streamError = (data && data.message) || '提问失败';
+          if (handlers.onError) handlers.onError(streamError);
+        }
+      };
+
+      const flushBlock = (block) => {
+        const lines = block.split(/\r?\n/);
+        let eventName = 'message';
+        const dataLines = [];
+        lines.forEach(line => {
+          if (line.startsWith('event:')) {
+            eventName = line.slice(6).trim();
+          } else if (line.startsWith('data:')) {
+            dataLines.push(line.slice(5).trim());
+          }
+        });
+        if (!dataLines.length) return;
+        let parsed = {};
+        try {
+          parsed = JSON.parse(dataLines.join('\n'));
+        } catch (_) {
+          parsed = { raw: dataLines.join('\n') };
+        }
+        dispatch(eventName, parsed);
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let sep;
+        while ((sep = buffer.search(/\r?\n\r?\n/)) >= 0) {
+          const block = buffer.slice(0, sep);
+          buffer = buffer.slice(sep).replace(/^\r?\n\r?\n/, '');
+          if (block.trim()) flushBlock(block);
+        }
+      }
+      if (buffer.trim()) flushBlock(buffer);
+
+      if (streamError) throw new Error(streamError);
+      if (!finalData) throw new Error('流式回答未完整结束');
+      return finalData;
     }
   };
 })();

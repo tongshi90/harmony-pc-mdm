@@ -9,8 +9,6 @@ async function renderUsers() {
   let adminKeyword = '';
   let mqtt = null;
   let mqttError = '';
-  /** 本次表单是否已「尝试连接」成功；改表单后失效，未验证不可保存 */
-  let mqttProbeOk = false;
   let logConfig = null;
   let logConfigError = '';
   let loadError = '';
@@ -89,9 +87,35 @@ async function renderUsers() {
     try {
       mqtt = await MDMApi.getMqttConfig();
       mqttError = '';
+      return mqtt;
     } catch (e) {
       mqtt = null;
       mqttError = e.message || 'MQTT 配置加载失败';
+      return null;
+    }
+  }
+
+  /** 仅刷新右上角连接状态，不打断用户正在编辑的表单 */
+  async function refreshMqttStatusLabel() {
+    const wrap = document.getElementById('mqtt-config-wrap');
+    if (!wrap) return;
+    try {
+      const latest = await MDMApi.getMqttConfig();
+      mqtt = Object.assign({}, mqtt || {}, latest || {});
+      mqttError = '';
+      const extra = wrap.querySelector('.panel-header .extra');
+      if (extra) {
+        extra.innerHTML = mqttStatusLabel(mqtt);
+      } else if (mqttError || !wrap.querySelector('.panel-header')) {
+        wrap.innerHTML = mqttFormHtml();
+        if (typeof window.__bindMqttForm === 'function') window.__bindMqttForm();
+      }
+    } catch (e) {
+      const extra = wrap.querySelector('.panel-header .extra');
+      if (extra) {
+        const tip = String(e.message || '状态刷新失败').replace(/"/g, '&quot;');
+        extra.innerHTML = `<span class="tag tag-orange" title="${tip}">状态获取失败</span>`;
+      }
     }
   }
 
@@ -154,8 +178,11 @@ async function renderUsers() {
     if (!mdmVersions.length) {
       return '<div class="text-muted">暂无版本，请新建</div>';
     }
-    return `<div class="card-grid">${mdmVersions.map(v => `
-      <div class="entity-card version-card">
+    return `<div class="card-grid cols-4">${mdmVersions.map(v => {
+      const published = Number(v.status) === 2;
+      const canBatch = published && !!v.has_package;
+      return `
+      <div class="entity-card version-card mdm-version-card">
         <div class="entity-card-badges">${mdmVerStatus(v.status)}</div>
         <div class="entity-card-head entity-card-head--vcenter">
           <div>
@@ -170,24 +197,28 @@ async function renderUsers() {
         </div>
         <div class="entity-card-foot">
           <div class="entity-card-actions-main">
-            <button class="btn btn-sm btn-primary btn-mdm-edit" type="button"
+            <button class="btn btn-sm btn-mdm-edit" type="button"
               data-id="${escapeHtml(v.id)}"
               data-name="${escapeHtml(v.version_name || '')}"
               data-code="${escapeHtml(v.version_code || '')}"
               data-file="${escapeHtml(v.file_name || '')}"
               data-size="${v.file_size != null ? escapeHtml(v.file_size) : ''}"
               data-has-pkg="${v.has_package ? '1' : '0'}">编辑</button>
-            ${Number(v.status) === 2
+            ${published
               ? `<button class="btn btn-sm btn-mdm-unpublish" type="button" data-id="${escapeHtml(v.id)}" data-name="${escapeHtml(v.version_name || '')}">下架</button>`
-              : `<button class="btn btn-sm btn-mdm-publish" type="button" data-id="${escapeHtml(v.id)}" data-name="${escapeHtml(v.version_name || '')}" ${v.has_package ? '' : 'disabled title="请先上传安装包"'}>发布</button>`}
+              : `<button class="btn btn-sm btn-primary btn-mdm-publish" type="button" data-id="${escapeHtml(v.id)}" data-name="${escapeHtml(v.version_name || '')}" ${v.has_package ? '' : 'disabled title="请先上传安装包"'}>发布</button>`}
+            ${canBatch
+              ? `<button class="btn btn-sm btn-primary btn-mdm-batch" type="button" data-id="${escapeHtml(v.id)}" data-name="${escapeHtml(v.version_name || '')}" data-code="${escapeHtml(v.version_code || '')}">批量下发</button>`
+              : ''}
           </div>
           <div class="entity-card-actions-more">
-            ${Number(v.status) === 2
+            ${published
               ? `<button class="btn btn-sm btn-link" type="button" disabled title="请先下架后再删除">删除</button>`
               : `<button class="btn btn-sm btn-link btn-text-danger btn-mdm-del-ver" type="button" data-id="${escapeHtml(v.id)}" data-name="${escapeHtml(v.version_name || '')}">删除</button>`}
           </div>
         </div>
-      </div>`).join('')}</div>`;
+      </div>`;
+    }).join('')}</div>`;
   }
 
   function mdmPanelHtml() {
@@ -344,6 +375,251 @@ async function renderUsers() {
     }
   }
 
+  let mdmGroupsCache = null;
+  async function loadMdmTargetGroups() {
+    if (mdmGroupsCache) return mdmGroupsCache;
+    const data = await MDMApi.listMdmTargetGroups();
+    mdmGroupsCache = Array.isArray(data) ? data : (data.items || []);
+    return mdmGroupsCache;
+  }
+
+  function openMdmBatchUpgradeModal(ver) {
+    const versionId = ver && ver.id;
+    if (!versionId) return;
+
+    loadMdmTargetGroups().then(groups => {
+      const byParent = {};
+      groups.forEach(g => {
+        const pid = g.parent_id || '';
+        if (!byParent[pid]) byParent[pid] = [];
+        byParent[pid].push(g);
+      });
+      function walk(pid, depth) {
+        return (byParent[pid] || []).map(g => ({
+          ...g,
+          depth,
+          children: walk(g.id, depth + 1)
+        }));
+      }
+      const tree = walk('', 0);
+      const flat = [];
+      (function flatten(nodes) {
+        (nodes || []).forEach(n => {
+          flat.push(n);
+          if (n.children && n.children.length) flatten(n.children);
+        });
+      })(tree);
+      const nodeMap = Object.fromEntries(flat.map(n => [String(n.id), n]));
+      let selected = new Set();
+      const expandedIds = new Set(
+        tree.filter(n => n.children && n.children.length).map(n => String(n.id))
+      );
+
+      function collectDescendantIds(node, acc) {
+        const out = acc || [];
+        (node.children || []).forEach(c => {
+          out.push(String(c.id));
+          collectDescendantIds(c, out);
+        });
+        return out;
+      }
+
+      function renderGroupTreeRows(nodes, selectedSet, expandedSet) {
+        if (!nodes.length) {
+          return '<div class="batch-group-empty">暂无成员分组</div>';
+        }
+        const rows = [];
+        function walkRows(list, depth) {
+          list.forEach(n => {
+            const id = String(n.id);
+            const hasChildren = !!(n.children && n.children.length);
+            const expanded = hasChildren && expandedSet.has(id);
+            const checked = selectedSet.has(id);
+            const descIds = hasChildren ? collectDescendantIds(n) : [];
+            const descChecked = descIds.filter(x => selectedSet.has(x)).length;
+            const indeterminate = !checked && descChecked > 0 && descChecked < descIds.length;
+            const toggle = hasChildren
+              ? `<button type="button" class="batch-group-toggle${expanded ? ' is-open' : ''}" data-toggle-id="${escapeHtml(id)}" aria-label="${expanded ? '收起' : '展开'}"></button>`
+              : '<span class="batch-group-toggle is-leaf" aria-hidden="true"></span>';
+            rows.push(`<div class="batch-group-option${checked ? ' is-checked' : ''}" style="--d:${depth}">
+              ${toggle}
+              <label class="batch-group-option-label">
+                <input type="checkbox" class="batch-group-cb" value="${escapeHtml(id)}"${checked ? ' checked' : ''}${indeterminate ? ' data-indeterminate="1"' : ''}>
+                <span class="batch-group-option-text">
+                  <span class="batch-group-option-name">${escapeHtml(n.name)}</span>
+                  <span class="batch-group-option-meta">${Number(n.device_count) || 0} 台</span>
+                </span>
+              </label>
+            </div>`);
+            if (expanded) walkRows(n.children, depth + 1);
+          });
+        }
+        walkRows(nodes, 0);
+        return rows.join('');
+      }
+
+      U.modal({
+        title: '批量下发 MDM 升级',
+        okText: '确认下发',
+        size: 'sm',
+        body: `
+          <div class="form-item" style="margin-bottom:0">
+            <div class="batch-group-picker is-open" id="mdm-batch-group-picker">
+              <div class="batch-group-head">
+                <span class="batch-group-head-label">目标分组</span>
+                <span class="batch-group-head-status is-empty" id="mdm-batch-group-summary">未选择</span>
+              </div>
+              <div class="batch-group-panel" id="mdm-batch-group-panel">
+                <div class="batch-group-tools">
+                  <label class="batch-group-all">
+                    <input type="checkbox" id="mdm-batch-all-groups">
+                    <span>全选</span>
+                  </label>
+                  <button type="button" class="btn-link" id="mdm-batch-clear-groups">清空</button>
+                </div>
+                <div class="batch-group-options" id="mdm-batch-group-list"></div>
+              </div>
+            </div>
+          </div>`,
+        onOk: async () => {
+          const groupIds = Array.from(selected);
+          if (!groupIds.length) {
+            U.toast('请至少选择一个成员分组', 'error');
+            return false;
+          }
+          try {
+            const result = await MDMApi.batchUpgradeMdm(versionId, {
+              all_groups: false,
+              group_ids: groupIds
+            });
+            U.toast((result && result.message) || '批量下发完成', 'success');
+            return true;
+          } catch (e) {
+            U.toast(e.message || '批量下发失败', 'error');
+            return false;
+          }
+        }
+      });
+
+      const listEl = document.getElementById('mdm-batch-group-list');
+      const summaryEl = document.getElementById('mdm-batch-group-summary');
+      const allCb = document.getElementById('mdm-batch-all-groups');
+      const clearBtn = document.getElementById('mdm-batch-clear-groups');
+
+      function subtreeIds(id) {
+        const node = nodeMap[id];
+        if (!node) return [id];
+        return [id, ...collectDescendantIds(node)];
+      }
+
+      function clearAncestors(id) {
+        let cur = nodeMap[id];
+        while (cur && cur.parent_id != null && cur.parent_id !== '') {
+          const pid = String(cur.parent_id);
+          selected.delete(pid);
+          cur = nodeMap[pid];
+        }
+      }
+
+      function bubbleAncestors(id) {
+        let cur = nodeMap[id];
+        while (cur && cur.parent_id != null && cur.parent_id !== '') {
+          const pid = String(cur.parent_id);
+          const parent = nodeMap[pid];
+          if (!parent) break;
+          const childIds = (parent.children || []).map(c => String(c.id));
+          if (childIds.length && childIds.every(cid => selected.has(cid))) {
+            selected.add(pid);
+            cur = parent;
+          } else {
+            break;
+          }
+        }
+      }
+
+      function syncAllCheckbox() {
+        if (!allCb || !flat.length) return;
+        const n = selected.size;
+        allCb.checked = n > 0 && n === flat.length;
+        allCb.indeterminate = n > 0 && n < flat.length;
+      }
+
+      function syncSummary() {
+        if (!summaryEl) return;
+        const n = selected.size;
+        if (!n) {
+          summaryEl.textContent = '未选择';
+          summaryEl.classList.add('is-empty');
+        } else if (n === flat.length && flat.length) {
+          summaryEl.textContent = `已选全部 ${n} 个`;
+          summaryEl.classList.remove('is-empty');
+        } else {
+          summaryEl.textContent = `已选 ${n} 个`;
+          summaryEl.classList.remove('is-empty');
+        }
+        syncAllCheckbox();
+      }
+
+      function applyIndeterminate() {
+        listEl?.querySelectorAll('.batch-group-cb').forEach(cb => {
+          cb.indeterminate = cb.dataset.indeterminate === '1';
+        });
+      }
+
+      function rerenderList() {
+        if (listEl) listEl.innerHTML = renderGroupTreeRows(tree, selected, expandedIds);
+        bindListEvents();
+        applyIndeterminate();
+        syncSummary();
+      }
+
+      function bindListEvents() {
+        listEl?.querySelectorAll('.batch-group-toggle[data-toggle-id]').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = btn.dataset.toggleId;
+            if (!id) return;
+            if (expandedIds.has(id)) expandedIds.delete(id);
+            else expandedIds.add(id);
+            rerenderList();
+          });
+        });
+        listEl?.querySelectorAll('.batch-group-cb').forEach(cb => {
+          cb.addEventListener('change', () => {
+            const id = String(cb.value);
+            const ids = subtreeIds(id);
+            if (cb.checked) {
+              ids.forEach(x => selected.add(x));
+              bubbleAncestors(id);
+            } else {
+              ids.forEach(x => selected.delete(x));
+              clearAncestors(id);
+            }
+            rerenderList();
+          });
+        });
+      }
+
+      allCb?.addEventListener('change', () => {
+        selected = allCb.checked
+          ? new Set(flat.map(g => String(g.id)))
+          : new Set();
+        rerenderList();
+      });
+
+      clearBtn?.addEventListener('click', e => {
+        e.preventDefault();
+        selected = new Set();
+        rerenderList();
+      });
+
+      rerenderList();
+    }).catch(e => {
+      U.toast(e.message || '加载分组失败', 'error');
+    });
+  }
+
   function bindMdmActions() {
     const wrap = document.getElementById('mdm-panel-wrap');
     if (!wrap) return;
@@ -359,6 +635,16 @@ async function renderUsers() {
           fileName: btn.dataset.file || '',
           fileSize: btn.dataset.size ? Number(btn.dataset.size) : null,
           hasPackage: btn.dataset.hasPkg === '1'
+        });
+      });
+    });
+
+    wrap.querySelectorAll('.btn-mdm-batch').forEach(btn => {
+      btn.addEventListener('click', () => {
+        openMdmBatchUpgradeModal({
+          id: btn.dataset.id,
+          name: btn.dataset.name || '',
+          code: btn.dataset.code || ''
         });
       });
     });
@@ -635,10 +921,7 @@ async function renderUsers() {
             </div>
           </div>
           <div class="settings-form-actions" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" type="button" id="btn-test-mqtt">尝试连接</button>
-            <span id="btn-save-mqtt-wrap"${mqttProbeOk ? '' : ' title="请先点击「尝试连接」，成功后再保存。"'} style="display:inline-flex">
-              <button class="btn btn-primary" type="button" id="btn-save-mqtt"${mqttProbeOk ? '' : ' disabled'}>保存配置</button>
-            </span>
+            <button class="btn btn-primary" type="button" id="btn-mqtt-connect-save">连接并保存</button>
           </div>
         </div>
       </div>`;
@@ -856,29 +1139,8 @@ async function renderUsers() {
         if (!wrap) return;
         U.bindPasswordToggles(wrap);
 
-        const saveBtn = document.getElementById('btn-save-mqtt');
-        const saveWrap = document.getElementById('btn-save-mqtt-wrap');
-        const SAVE_HINT = '请先点击「尝试连接」，成功后再保存。';
         const pwdInput = document.getElementById('mqtt-password');
         if (pwdInput) pwdInput.classList.add('mqtt-field');
-
-        function syncSaveHint() {
-          if (!saveBtn || !saveWrap) return;
-          saveBtn.disabled = !mqttProbeOk;
-          if (mqttProbeOk) saveWrap.removeAttribute('title');
-          else saveWrap.setAttribute('title', SAVE_HINT);
-        }
-
-        function invalidateProbe() {
-          if (!mqttProbeOk) return;
-          mqttProbeOk = false;
-          syncSaveHint();
-        }
-
-        wrap.querySelectorAll('.mqtt-field').forEach(el => {
-          el.addEventListener('input', invalidateProbe);
-          el.addEventListener('change', invalidateProbe);
-        });
 
         function readMqttPayload() {
           const host = document.getElementById('mqtt-host').value.trim();
@@ -899,46 +1161,47 @@ async function renderUsers() {
           };
         }
 
-        document.getElementById('btn-test-mqtt')?.addEventListener('click', async () => {
+        document.getElementById('btn-mqtt-connect-save')?.addEventListener('click', async () => {
           const payload = readMqttPayload();
           if (!payload) return;
-          const btn = document.getElementById('btn-test-mqtt');
-          if (btn) btn.disabled = true;
-          try {
-            const res = await MDMApi.testMqttConfig(payload);
-            mqttProbeOk = true;
-            syncSaveHint();
-            U.toast((res && res.message) || '连接成功');
-          } catch (e) {
-            mqttProbeOk = false;
-            syncSaveHint();
-            U.toast(e.message || '连接失败', 'error');
-          } finally {
-            if (btn) btn.disabled = false;
+          const btn = document.getElementById('btn-mqtt-connect-save');
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = '连接中…';
           }
-        });
-
-        saveBtn?.addEventListener('click', async () => {
-          if (!mqttProbeOk) {
-            U.toast('请先尝试连接成功后再保存', 'error');
-            return;
-          }
-          const payload = readMqttPayload();
-          if (!payload) return;
           try {
+            await MDMApi.testMqttConfig(payload);
+            if (btn) btn.textContent = '保存中…';
             mqtt = await MDMApi.saveMqttConfig(payload);
-            mqttProbeOk = false;
-            U.toast('MQTT 配置已保存，并已切换连接');
+            // 再拉一次状态，确保右上角标签与后台长连接一致
+            try {
+              const latest = await MDMApi.getMqttConfig();
+              if (latest) mqtt = latest;
+            } catch (_) { /* 保留 save 返回 */ }
+            U.toast('连接成功，MQTT 配置已保存');
             wrap.innerHTML = mqttFormHtml();
             bindMqttForm();
           } catch (e) {
-            mqttProbeOk = false;
-            syncSaveHint();
-            U.toast(e.message || '保存失败', 'error');
+            U.toast(e.message || '连接失败，未保存配置', 'error');
+            await refreshMqttStatusLabel();
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = '连接并保存';
+            }
           }
         });
       }
+      window.__bindMqttForm = bindMqttForm;
       bindMqttForm();
+
+      // 切换到「系统配置」时刷新右上角连接状态
+      tabsWrap?.querySelector('.tab-item[data-tab="config"]')?.addEventListener('click', () => {
+        refreshMqttStatusLabel();
+      });
+      // 若默认就在系统配置 Tab，进入时再刷一次最新状态
+      if ((activeTab || 'admin') === 'config') {
+        refreshMqttStatusLabel();
+      }
 
       function bindLogConfigForm() {
         const wrap = document.getElementById('log-config-wrap');

@@ -262,7 +262,7 @@ def update_app(db: Session, app_id: int, data) -> dict:
                 if _has_published_version(db, app_id):
                     raise HTTPException(
                         status_code=400,
-                        detail="仍有已发布的版本，请先将全部版本下架后再下架应用",
+                        detail="请先下架该应用的全部已发布版本，再下架应用",
                     )
         app.status = new_status
     if data.app_icon is not None:

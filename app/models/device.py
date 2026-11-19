@@ -80,6 +80,13 @@ class Device(Base):
     remark: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 数据擦除待办：0无 · 1发送失败待补发 · 2已下发(retain)未确认，上线按库重推
     pending_disk_erasure: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 平台指定的应对齐 MDM 版本 → t_mdm_app_version.id；空=无批量升级预期
+    expected_mdm_version_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+        index=True,
+        comment="预期 MDM 版本 ID → t_mdm_app_version.id；空=无预期",
+    )
     create_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     update_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

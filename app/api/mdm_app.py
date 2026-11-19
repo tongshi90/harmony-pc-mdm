@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -12,8 +12,12 @@ from app.deps import require_menu
 from app.enums.menu import MenuCode
 from app.models.user import User
 from app.schemas.common import ok
-from app.schemas.mdm_app import MdmAppVersionCreate, MdmAppVersionUpdate
-from app.services import mdm_app_service
+from app.schemas.mdm_app import (
+    MdmAppVersionCreate,
+    MdmAppVersionUpdate,
+    MdmBatchUpgradeIn,
+)
+from app.services import department_service, mdm_app_service
 
 router = APIRouter(
     prefix="/mdm-app",
@@ -24,13 +28,22 @@ router = APIRouter(
 public_router = APIRouter(prefix="/mdm-app", tags=["MDM应用-安装包下载"])
 
 
+@router.get("/target-groups")
+def list_target_groups(
+    keyword: str | None = Query(None),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_menu(MenuCode.PLATFORM)),
+):
+    """批量下发用的分组列表（平台菜单权限即可）."""
+    return ok(department_service.list_departments(db, keyword))
+
+
 @router.get("/versions")
 def list_versions(
     db: Session = Depends(get_db),
     _: User = Depends(require_menu(MenuCode.PLATFORM)),
 ):
     return ok(mdm_app_service.list_versions(db))
-
 
 @router.post("/versions")
 @audit_log(module="平台基础管理", action="新建 MDM 版本")
@@ -82,6 +95,25 @@ async def upload_package(
     _: User = Depends(require_menu(MenuCode.PLATFORM)),
 ):
     return ok(await mdm_app_service.upload_package(db, version_id, file))
+
+
+@router.post("/versions/{version_id}/batch-upgrade")
+@audit_log(module="平台基础管理", action="批量下发 MDM 升级")
+def batch_upgrade(
+    version_id: int,
+    body: MdmBatchUpgradeIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_menu(MenuCode.PLATFORM)),
+):
+    """按分组写入设备预期 MDM 版本，并对在线设备发 MQTT MDM_UPDATE."""
+    return ok(
+        mdm_app_service.batch_upgrade(
+            db,
+            version_id=version_id,
+            group_ids=list(body.group_ids or []),
+            all_groups=bool(body.all_groups),
+        )
+    )
 
 
 @public_router.get("/versions/{version_id}/package")

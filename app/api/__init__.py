@@ -12,6 +12,7 @@ from app.api import (
     platform,
     policy_dispatch,
 )
+from app.rag.api import router as rag_router
 
 # 云侧管理台接口统一前缀 /platform；对外设备侧白名单接口预留 /api/
 api_router = APIRouter(prefix="/platform")
@@ -37,3 +38,4 @@ api_router.include_router(device.router, prefix="/device", tags=["设备管理"]
 api_router.include_router(
     policy_dispatch.router, prefix="/policy", tags=["策略下发"]
 )
+api_router.include_router(rag_router, prefix="/rag", tags=["知识库问答"])

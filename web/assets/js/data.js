@@ -1,9 +1,8 @@
 /** 前端公共静态配置（导航 / 品牌）；业务数据一律走 API */
 window.MDM = {
   platform: {
-    name: 'Harmony PC MDM',
-    brand: 'Harmony PC MDM',
-    brandSub: '企业终端管控平台',
+    name: '企业终端管控平台',
+    brand: '企业终端管控平台',
     fullName: '企业终端管控平台',
     version: '0.3.0-beta'
   },
@@ -19,7 +18,8 @@ window.MDM = {
       { id: 'member', code: 'member', label: '人员管理', href: '/pages/members/members.html' },
       { id: 'member_group', code: 'member_group', label: '成员分组', href: '/pages/members/groups.html' },
       { id: 'app', code: 'app', label: '应用管理', href: '/pages/apps/apps.html' },
-      { id: 'policy_dispatch', code: 'policy_dispatch', label: '策略记录', href: '/pages/scenes/scene-dispatch.html' }
+      { id: 'policy_dispatch', code: 'policy_dispatch', label: '策略记录', href: '/pages/scenes/scene-dispatch.html' },
+      { id: 'rag', code: 'rag', label: '知识库问答', href: '/pages/rag/knowledge-bases.html' }
     ]},
     { group: '平台', items: [
       { id: 'platform', code: 'platform', label: '平台基础管理', href: '/pages/platform/users.html' }

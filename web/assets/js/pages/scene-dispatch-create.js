@@ -17,6 +17,25 @@
   let editingIndex = null;
   let submitting = false;
 
+  /** 已选人员缓存（搜索后仍能展示芯片） */
+  const selectedMemberCache = {};
+
+  // 设备管理「下发」等入口可通过 URL 预填目标与任务名
+  const qTargetType = (U.query('targetType') || '').trim();
+  const qMemberId = (U.query('memberId') || '').trim();
+  const qMemberName = (U.query('memberName') || '').trim();
+  const qEmployeeId = (U.query('employeeId') || '').trim();
+  const qTaskName = (U.query('taskName') || '').trim();
+  if (qTargetType === 'member' && qMemberId) {
+    targetType = 'member';
+    selectedMemberIds.add(qMemberId);
+    selectedMemberCache[qMemberId] = {
+      id: qMemberId,
+      name: qMemberName || qMemberId,
+      employee_id: qEmployeeId || ''
+    };
+  }
+
   function escapeHtml(str) {
     return String(str || '')
       .replace(/&/g, '&amp;')
@@ -147,9 +166,6 @@
     return g ? (g.path || g.name) : String(id);
   }
 
-  /** 已选人员缓存（搜索后仍能展示芯片） */
-  const selectedMemberCache = {};
-
   function memberLabelOf(id) {
     const m = selectedMemberCache[String(id)];
     if (!m) return String(id);
@@ -260,8 +276,11 @@
       size: 'sm',
       body: `
         <div class="form-item" style="margin-bottom:0">
-          <label class="form-label">目标分组 <span class="required">*</span></label>
           <div class="batch-group-picker is-open" id="pd-group-picker">
+            <div class="batch-group-head">
+              <span class="batch-group-head-label">目标分组</span>
+              <span class="batch-group-head-status is-empty" id="pd-group-summary">未选择</span>
+            </div>
             <div class="batch-group-panel">
               <div class="batch-group-tools">
                 <label class="batch-group-all">
@@ -273,7 +292,6 @@
               <div class="batch-group-options" id="pd-group-list"></div>
             </div>
           </div>
-          <div class="batch-group-hint">勾选父组将自动选中全部子组</div>
         </div>`,
       onOk: () => {
         if (!selected.size) {
@@ -287,6 +305,7 @@
     });
 
     const listEl = document.getElementById('pd-group-list');
+    const summaryEl = document.getElementById('pd-group-summary');
     const allCb = document.getElementById('pd-group-all');
     const clearBtn = document.getElementById('pd-group-clear');
 
@@ -328,6 +347,21 @@
       allCb.indeterminate = n > 0 && n < flat.length;
     }
 
+    function syncSummary() {
+      if (!summaryEl) return;
+      const n = selected.size;
+      if (!n) {
+        summaryEl.textContent = '未选择';
+        summaryEl.classList.add('is-empty');
+      } else if (n === flat.length && flat.length) {
+        summaryEl.textContent = `已选全部 ${n} 个`;
+        summaryEl.classList.remove('is-empty');
+      } else {
+        summaryEl.textContent = `已选 ${n} 个`;
+        summaryEl.classList.remove('is-empty');
+      }
+    }
+
     function applyIndeterminate() {
       listEl?.querySelectorAll('.pd-group-cb').forEach(cb => {
         cb.indeterminate = cb.dataset.indeterminate === '1';
@@ -367,6 +401,7 @@
       bindListEvents();
       applyIndeterminate();
       syncAllCheckbox();
+      syncSummary();
     }
 
     allCb?.addEventListener('change', () => {
@@ -385,7 +420,7 @@
 
   function renderMemberRows(rows, selectedSet) {
     if (!rows.length) {
-      return '<div class="batch-group-empty">输入姓名筛选后勾选人员</div>';
+      return '<div class="batch-group-empty">输入姓名或工号筛选后勾选人员</div>';
     }
     return rows.map(m => {
       const id = String(m.id);
@@ -432,11 +467,14 @@
       size: 'sm',
       body: `
         <div class="form-item" style="margin-bottom:0">
-          <label class="form-label">目标人员 <span class="required">*</span></label>
           <div class="batch-group-picker is-open" id="pd-member-picker">
+            <div class="batch-group-head">
+              <span class="batch-group-head-label">目标人员</span>
+              <span class="batch-group-head-status is-empty" id="pd-member-summary">未选择</span>
+            </div>
             <div class="batch-group-panel">
               <div class="batch-group-search-bar">
-                <input type="search" class="form-input" id="pd-member-kw" placeholder="按姓名筛选" value="${escapeHtml(memberKeyword)}">
+                <input type="search" class="form-input" id="pd-member-kw" placeholder="按姓名或工号筛选（仅已绑定设备）" value="${escapeHtml(memberKeyword)}">
               </div>
               <div class="batch-group-tools">
                 <label class="batch-group-all">
@@ -448,7 +486,6 @@
               <div class="batch-group-options" id="pd-member-list"></div>
             </div>
           </div>
-          <div class="batch-group-hint" id="pd-member-hint">按姓名筛选后勾选（仅已绑定设备）</div>
         </div>`,
       onOk: () => {
         if (!selected.size) {
@@ -462,10 +499,10 @@
     });
 
     const listEl = document.getElementById('pd-member-list');
+    const summaryEl = document.getElementById('pd-member-summary');
     const kwInput = document.getElementById('pd-member-kw');
     const allCb = document.getElementById('pd-member-all');
     const clearBtn = document.getElementById('pd-member-clear');
-    const hintEl = document.getElementById('pd-member-hint');
     let searchTimer = null;
 
     function syncAllCheckbox() {
@@ -481,12 +518,16 @@
       allCb.indeterminate = checkedN > 0 && checkedN < rows.length;
     }
 
-    function syncHint() {
-      if (!hintEl) return;
+    function syncSummary() {
+      if (!summaryEl) return;
       const n = selected.size;
-      hintEl.textContent = n
-        ? `已选 ${n} 人 · 按姓名筛选后勾选（仅已绑定设备）`
-        : '按姓名筛选后勾选（仅已绑定设备）';
+      if (!n) {
+        summaryEl.textContent = '未选择';
+        summaryEl.classList.add('is-empty');
+      } else {
+        summaryEl.textContent = `已选 ${n} 人`;
+        summaryEl.classList.remove('is-empty');
+      }
     }
 
     function bindListEvents() {
@@ -498,7 +539,7 @@
           // 只更新勾选态与工具栏，避免整表重绘打断连续勾选
           cb.closest('.batch-group-option')?.classList.toggle('is-checked', cb.checked);
           syncAllCheckbox();
-          syncHint();
+          syncSummary();
         });
       });
     }
@@ -507,7 +548,7 @@
       if (listEl) listEl.innerHTML = renderMemberRows(memberOptions || [], selected);
       bindListEvents();
       syncAllCheckbox();
-      syncHint();
+      syncSummary();
     }
 
     async function doSearch() {
@@ -745,17 +786,17 @@
         <div class="panel-body">
           <div class="form-grid">
             <div class="form-item"><label class="form-label">任务名称 <span style="color:var(--error)">*</span></label>
-              <input class="form-input" id="task-name" value="策略批量下发" placeholder="任务名称"></div>
+              <input class="form-input" id="task-name" value="${escapeHtml(qTaskName || '策略批量下发')}" placeholder="任务名称"></div>
             ${U.renderPolicyDispatchFields({ level: 'normal', deadlineHours: 4 })}
           </div>
 
           <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
             <div class="form-label" style="margin-bottom:10px">目标范围 <span style="color:var(--error)">*</span></div>
             <div class="pd-target-mode" id="target-type-mode" role="group" aria-label="目标范围">
-              <button type="button" class="pd-target-mode-btn is-active" data-type="group">按成员分组</button>
-              <button type="button" class="pd-target-mode-btn" data-type="member">手动选择人员</button>
+              <button type="button" class="pd-target-mode-btn${targetType === 'group' ? ' is-active' : ''}" data-type="group">按成员分组</button>
+              <button type="button" class="pd-target-mode-btn${targetType === 'member' ? ' is-active' : ''}" data-type="member">手动选择人员</button>
             </div>
-            <input type="hidden" id="target-type" value="group">
+            <input type="hidden" id="target-type" value="${escapeHtml(targetType)}">
             <div id="pd-target-summary" style="margin-top:12px"></div>
           </div>
         </div>

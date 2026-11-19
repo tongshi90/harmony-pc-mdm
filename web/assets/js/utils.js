@@ -136,6 +136,30 @@ window.MDMUtils = {
     setTimeout(() => el.remove(), 2800);
   },
 
+  /** 全屏忙碌遮罩：耗时操作（如删除知识库）期间阻止重复点击 */
+  showBusy(msg = '处理中，请稍候…') {
+    let mask = document.querySelector('.busy-modal-mask');
+    if (!mask) {
+      mask = document.createElement('div');
+      mask.className = 'modal-mask busy-modal-mask';
+      mask.innerHTML = `<div class="modal busy-modal">
+        <div class="modal-body busy-modal-body">
+          <div class="busy-spinner" aria-hidden="true"></div>
+          <div class="busy-text"></div>
+        </div>
+      </div>`;
+      document.body.appendChild(mask);
+    }
+    const text = mask.querySelector('.busy-text');
+    if (text) text.textContent = msg || '处理中，请稍候…';
+    mask.classList.add('show');
+  },
+
+  hideBusy() {
+    const mask = document.querySelector('.busy-modal-mask');
+    if (mask) mask.classList.remove('show');
+  },
+
   confirm(msg, onOk) {
     // 使用独立 class，避免命中页面内其它带 modal-mask 的业务弹窗（如成员导入）
     let mask = document.querySelector('.confirm-modal-mask');
@@ -2194,7 +2218,10 @@ window.MDMUtils = {
     sceneForm: '/pages/scenes/scene-dispatch.html',
     sceneDispatch: '/pages/scenes/scene-dispatch.html',
     sceneDispatchCreate: '/pages/scenes/scene-dispatch-create.html',
-    sceneDispatchDetail: '/pages/scenes/scene-dispatch-detail.html'
+    sceneDispatchDetail: '/pages/scenes/scene-dispatch-detail.html',
+    ragKnowledgeBases: '/pages/rag/knowledge-bases.html',
+    ragKnowledgeBaseDetail: '/pages/rag/knowledge-base-detail.html',
+    ragAsk: '/pages/rag/ask.html'
   },
 
   /** 策略类型文案（与客户端统一：紧急 / 普通） */

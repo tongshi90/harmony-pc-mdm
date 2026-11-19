@@ -18,8 +18,8 @@
   let appsData = [];
 
   const PIE_COLORS = [
-    '#0f766e', '#14b8a6', '#2dd4bf', '#5eead4', '#99f6e4',
-    '#64748b', '#94a3b8', '#cbd5e1', '#f59e0b', '#f97316'
+    '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#1d4ed8',
+    '#64748b', '#94a3b8', '#cbd5e1', '#f59e0b', '#12b886'
   ];
 
   function icoPerson() {
@@ -39,32 +39,43 @@
     const noncompliant = Number(d.noncompliant) || 0;
     const bound = online + offline;
     const href = (q) => (q ? U.href('devices', q) : U.href('devices'));
-    const parts = [
-      { key: 'online', label: '在线设备数', value: online, q: { status: '1', bind: '1' } },
-      { key: 'offline', label: '离线设备数', value: offline, q: { status: '2', bind: '1' } },
-      { key: 'unbound', label: '未绑定设备数', value: unbound, q: { bind: '0' } }
+    const cards = [
+      { key: 'total', label: '在册终端', value: total, sub: `已绑定 ${fmt(bound)}`, q: null, accent: 'primary' },
+      { key: 'online', label: '在线', value: online, sub: '可即时下发', q: { status: '1', bind: '1' }, accent: 'ok' },
+      { key: 'offline', label: '离线', value: offline, sub: '待回连', q: { status: '2', bind: '1' }, accent: 'mute' },
+      { key: 'unbound', label: '未绑定', value: unbound, sub: '待登记人员', q: { bind: '0' }, accent: 'amber' }
     ];
-    const segs = parts
-      .filter(p => p.value > 0)
+    const segs = [
+      { key: 'online', value: online },
+      { key: 'offline', value: offline },
+      { key: 'unbound', value: unbound }
+    ].filter(p => p.value > 0)
       .map(p => `<span class="dash-dev-seg is-${p.key}" style="flex:${p.value}"></span>`)
       .join('');
-    const col = p => `<a class="dash-dev-col is-${p.key}" href="${href(p.q)}">
-        <span class="k"><i class="dash-dev-dot is-${p.key}" aria-hidden="true"></i>${p.label}</span>
-        <span class="v">${fmt(p.value)}</span>
-      </a>`;
     return `
-      <section class="panel dash-panel" id="dash-dev-panel" aria-label="设备统计">
-        <div class="panel-header">
-          <h3>在册终端</h3>
-          <a class="dash-dev-total" href="${href()}">${fmt(total)}</a>
-        </div>
-        <div class="panel-body dash-dev-body">
-          <div class="dash-dev-track" aria-hidden="true">${segs || '<span class="dash-dev-seg is-offline" style="flex:1"></span>'}</div>
-          <div class="dash-dev-grid">
-            ${parts.map(col).join('')}
-            <a class="dash-dev-nc${noncompliant > 0 ? ' is-alert' : ''}" href="${href({})}">已绑定设备数 ${fmt(bound)} · 不合规设备数 ${fmt(noncompliant)}</a>
+      <section class="dash-hero" id="dash-dev-panel" aria-label="设备统计">
+        <div class="dash-hero-head">
+          <div>
+            <h3>终端概览</h3>
+            <p>实时掌握在册设备状态与合规情况</p>
           </div>
+          <a class="btn btn-sm" href="${href()}">进入设备管理</a>
         </div>
+        <div class="dash-kpi-row">
+          ${cards.map(c => `
+            <a class="dash-kpi is-${c.accent}" href="${href(c.q)}">
+              <span class="dash-kpi-label">${c.label}</span>
+              <span class="dash-kpi-value">${fmt(c.value)}</span>
+              <span class="dash-kpi-sub">${c.sub}</span>
+            </a>`).join('')}
+        </div>
+        <div class="dash-dev-track" aria-hidden="true">${segs || '<span class="dash-dev-seg is-offline" style="flex:1"></span>'}</div>
+        <a class="dash-dev-nc${noncompliant > 0 ? ' is-alert' : ''}" href="${href({})}">
+          <span>已绑定 ${fmt(bound)}</span>
+          <span class="dash-dev-nc-sep">·</span>
+          <span>不合规 ${fmt(noncompliant)}</span>
+          ${noncompliant > 0 ? '<em>需关注</em>' : '<em class="is-ok">状态良好</em>'}
+        </a>
       </section>`;
   }
 
@@ -162,7 +173,7 @@
 
   function orgBreadcrumbHtml() {
     if (!orgPath.length) {
-      return `<span class="extra">点击行可查看下级分组</span>`;
+      return `<div class="dash-org-crumbs"><span class="dash-org-tip">点击行可查看下级分组</span></div>`;
     }
     const parts = [`<button type="button" class="dash-org-crumb" data-org-depth="0">全部</button>`];
     orgPath.forEach((id, idx) => {
@@ -180,8 +191,10 @@
   function orgChartShellHtml() {
     if (!orgTree.length) {
       return `
-        <section class="panel dash-panel" id="dash-org-panel">
-          <div class="panel-header"><h3>组织分布</h3></div>
+        <section class="panel dash-panel dash-panel-org" id="dash-org-panel">
+          <div class="panel-header">
+            <h3>组织分布</h3>
+          </div>
           <div class="panel-body text-muted" style="padding:32px;text-align:center">暂无分组数据</div>
         </section>`;
     }
@@ -190,16 +203,18 @@
       ? `<button type="button" class="btn btn-sm" id="dash-org-back">返回上一级</button>`
       : '';
     return `
-      <section class="panel dash-panel" id="dash-org-panel">
+      <section class="panel dash-panel dash-panel-org" id="dash-org-panel">
         <div class="panel-header">
           <h3>组织分布</h3>
-          ${orgBreadcrumbHtml()}
         </div>
         <div class="panel-body">
+          <div class="dash-org-toolbar">
+            ${orgBreadcrumbHtml()}
+            ${backBtn}
+          </div>
           <div class="dash-org-legend">
             <span><i class="dash-swatch bound"></i>${icoDevice()}已绑终端</span>
             <span><i class="dash-swatch unbound"></i>${icoPerson()}未绑成员</span>
-            ${backBtn}
           </div>
           ${orgStackListHtml(items)}
         </div>
@@ -379,7 +394,7 @@
     }).join('');
 
     return `
-      <section class="panel dash-panel" id="dash-apps-panel">
+      <section class="panel dash-panel dash-panel-apps" id="dash-apps-panel">
         <div class="panel-header">
           <h3>应用安装</h3>
           <a class="extra btn-link" href="${U.href('apps')}">应用管理</a>
@@ -411,8 +426,10 @@
     return `
       <div class="dash-page">
         ${devicePanelHtml(devices)}
-        ${orgChartShellHtml()}
-        ${appsChartHtml(apps)}
+        <div class="dash-grid-main">
+          ${orgChartShellHtml()}
+          ${appsChartHtml(apps)}
+        </div>
       </div>`;
   }
 

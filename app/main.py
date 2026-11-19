@@ -14,6 +14,7 @@ from app.api.device_app import router as device_app_router
 from app.api.device_bind import router as device_bind_router
 from app.api.device_biz_card import router as device_biz_card_router
 from app.api.device_mdm import router as device_mdm_router
+from app.api.device_rag import router as device_rag_router
 from app.api.device_report import router as device_report_router
 from app.api.device_strategy import router as device_strategy_router
 from app.api.openapi_approval import router as openapi_approval_router
@@ -32,6 +33,7 @@ from app.services.op_log_purge_scheduler import (
     start_op_log_purge_scheduler,
     stop_op_log_purge_scheduler,
 )
+from app.rag.ingest_watchdog import start_ingest_watchdog, stop_ingest_watchdog
 from app.utils.crypto import get_public_key_pem
 
 
@@ -62,6 +64,7 @@ app.include_router(device_app_router, prefix="/api")
 app.include_router(device_bind_router, prefix="/api")
 app.include_router(device_mdm_router, prefix="/api")
 app.include_router(device_biz_card_router, prefix="/api")
+app.include_router(device_rag_router, prefix="/api")
 # 企业对接 OpenAPI（/openapi/*，非 /platform 前缀，AuthGuard 自然放行；暂无签名）
 app.include_router(openapi_approval_router, prefix="/openapi")
 
@@ -81,12 +84,21 @@ def on_startup() -> None:
     start_device_online_sync_scheduler()
     # 操作日志：每天本地 01:00 清理过期 t_sys_op_log
     start_op_log_purge_scheduler()
+    # RAG：重启后恢复 parsing 队列 + 入库超时巡检（从正式解析起算）
+    try:
+        from app.rag.service import resume_interrupted_ingests
+
+        resume_interrupted_ingests()
+    except Exception:
+        logging.getLogger("mdm.rag").exception("RAG 启动恢复入库失败（不影响服务启动）")
+    start_ingest_watchdog()
 
 
 @app.on_event("shutdown")
 def on_shutdown() -> None:
     stop_device_online_sync_scheduler()
     stop_op_log_purge_scheduler()
+    stop_ingest_watchdog()
 
 
 @app.exception_handler(HTTPException)

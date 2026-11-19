@@ -1,58 +1,89 @@
-/* Harmony PC MDM · 设计令牌（B 端精简）
+/* Harmony PC MDM · 设计令牌（观象灵策风格对齐）
  * 不引用外网字体：@import 会阻塞解析。
  */
 :root {
-  --ink: #0b1220;
-  --ink-2: #334155;
-  --mute: #64748b;
-  --line: #e2e8f0;
-  --paper: #ffffff;
-  --canvas: #f1f5f9;
-  --teal: #0f766e;
-  --teal-bright: #14b8a6;
-  --teal-soft: #ccfbf1;
-  --amber: #b45309;
-  --amber-soft: #ffedd5;
-  --blue: #0369a1;
-  --blue-soft: #e0f2fe;
+  /* 品牌主色 · 蓝 */
+  --accent: #2b5cff;
+  --accent-2: #4b7dff;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-soft: #edf3ff;
+  --primary-glow: rgba(43, 92, 255, 0.28);
 
+  /* 墨色与中性 */
+  --ink: #0f1b33;
+  --ink-2: #2e3b55;
+  --mute: #5b6882;
+  --faint: #98a4b9;
+  --line: #e6ebf3;
+  --line-2: #d3dbe7;
+  --paper: #ffffff;
+  --canvas: #eef2f8;
+  --panel-2: #f4f7fb;
+
+  /* 语义色 */
+  --teal: #12b886;
+  --teal-bright: #20c997;
+  --teal-soft: #e3f8f1;
+  --amber: #ffa31a;
+  --amber-ink: #b06800;
+  --amber-soft: #fff5e3;
+  --blue: #2563eb;
+  --blue-soft: #e9effd;
+  --ok: #12b886;
+  --ok-soft: #e3f8f1;
+  --signal: #ff4d4f;
+  --signal-soft: #fff1f0;
+
+  /* 语义别名 */
   --bg: var(--canvas);
   --surface: var(--paper);
-  --surface-2: #f8fafc;
+  --surface-2: var(--panel-2);
   --border: var(--line);
   --text: var(--ink);
   --text-secondary: var(--mute);
-  --primary: var(--teal);
-  --primary-hover: #0d9488;
-  --success: var(--teal);
+  --success: var(--ok);
   --warning: var(--amber);
-  --error: #b91c1c;
-  --primary-glow: rgba(15, 118, 110, 0.14);
-  --radius: 8px;
-  --radius-sm: 6px;
-  --shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.06);
-  --header-height: 52px;
-  --brand-width: 280px;
-  --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-  --font-mono: "Cascadia Mono", "Consolas", "SF Mono", ui-monospace, monospace;
+  --error: #b83240;
 
-  --sidebar-width: 0px;
-  --sidebar-bg: var(--ink);
-  --sidebar-text: rgba(255, 255, 255, 0.62);
-  --sidebar-text-active: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
+  /* 圆角 / 阴影 / 尺寸 */
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-xs: 8px;
+  --shadow: 0 1px 2px rgba(15, 27, 51, 0.04), 0 16px 36px -24px rgba(15, 27, 51, 0.32);
+  --shadow-md: 0 1px 2px rgba(15, 27, 51, 0.05), 0 22px 44px -24px rgba(15, 27, 51, 0.42);
+  --shadow-primary: 0 10px 22px -12px rgba(43, 92, 255, 0.9);
+  --header-height: 64px;
+  --sidebar-width: 240px;
+  --sidebar-brand-height: 64px;
+  --brand-width: 240px;
+
+  --font: "PingFang SC", "HarmonyOS Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+  --font-mono: "SF Mono", "Cascadia Mono", "Consolas", "JetBrains Mono", ui-monospace, monospace;
+  --font-num: "DIN Alternate", "DIN", "SF Pro Display", -apple-system, sans-serif;
+
+  /* 侧栏（对齐观象灵策浅色侧栏） */
+  --sidebar-bg: linear-gradient(180deg, #f7faff 0%, #f1f5fc 46%, #eef4f9 100%);
+  --sidebar-text: #2e3b55;
+  --sidebar-text-muted: #5b6882;
+  --sidebar-text-active: #1d4fe0;
+  --sidebar-hover: rgba(233, 239, 253, 0.86);
+  --sidebar-active-bg: rgba(255, 255, 255, 0.72);
+  --sidebar-border: #e8edf5;
+  --sidebar-group: #8a96ab;
+  --sidebar-active-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.95), 0 10px 22px -14px rgba(43, 92, 255, 0.6);
 }
 
 .stat-card .value,
 .sum-card .v {
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 .stat-card.accent-green .value,
-.sum-card.s2 .v { color: var(--teal); }
+.sum-card.s2 .v { color: var(--ok); }
 .stat-card.accent-gray .value,
 .sum-card.s3 .v { color: var(--mute); }
 .stat-card.accent-red .value,
 .sum-card.s4 .v { color: var(--error); }
-.sum-card.s5 .v { color: var(--amber); }
+.sum-card.s5 .v { color: var(--amber-ink); }

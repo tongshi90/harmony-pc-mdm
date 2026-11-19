@@ -416,24 +416,18 @@
             tree.filter(n => n.children && n.children.length).map(n => String(n.id))
           );
 
-          const tipHtml = isInstall
-            ? `<p class="batch-op-tip">批量安装/升级应用到最高已发布版本。</p>`
-            : '';
-
           U.modal({
             title: isInstall ? '批量安装' : '批量卸载',
             okText: isInstall ? '确认安装' : '确认卸载',
             size: 'sm',
             body: `
-              ${tipHtml}
               <div class="form-item" style="margin-bottom:0">
-                <label class="form-label">目标分组 <span class="required">*</span></label>
-                <div class="batch-group-picker" id="batch-group-picker">
-                  <button type="button" class="form-input batch-group-trigger" id="batch-group-trigger" aria-expanded="false">
-                    <span class="batch-group-trigger-text is-placeholder" id="batch-group-summary">请选择分组</span>
-                    <span class="batch-group-caret" aria-hidden="true"></span>
-                  </button>
-                  <div class="batch-group-panel" id="batch-group-panel" hidden>
+                <div class="batch-group-picker is-open" id="batch-group-picker">
+                  <div class="batch-group-head">
+                    <span class="batch-group-head-label">目标分组</span>
+                    <span class="batch-group-head-status is-empty" id="batch-group-summary">未选择</span>
+                  </div>
+                  <div class="batch-group-panel" id="batch-group-panel">
                     <div class="batch-group-tools">
                       <label class="batch-group-all">
                         <input type="checkbox" id="batch-all-groups">
@@ -444,7 +438,6 @@
                     <div class="batch-group-options" id="batch-group-list"></div>
                   </div>
                 </div>
-                <div class="batch-group-hint">勾选父组将自动选中全部子组</div>
               </div>`,
             onOk: async () => {
               const groupIds = Array.from(selected);
@@ -481,19 +474,10 @@
             }
           });
 
-          const picker = document.getElementById('batch-group-picker');
-          const trigger = document.getElementById('batch-group-trigger');
-          const panel = document.getElementById('batch-group-panel');
           const listEl = document.getElementById('batch-group-list');
           const summaryEl = document.getElementById('batch-group-summary');
           const allCb = document.getElementById('batch-all-groups');
           const clearBtn = document.getElementById('batch-clear-groups');
-
-          function setOpen(open) {
-            picker?.classList.toggle('is-open', open);
-            trigger?.setAttribute('aria-expanded', open ? 'true' : 'false');
-            if (panel) panel.hidden = !open;
-          }
 
           function subtreeIds(id) {
             const node = nodeMap[id];
@@ -537,14 +521,14 @@
             if (!summaryEl) return;
             const n = selected.size;
             if (!n) {
-              summaryEl.textContent = '请选择分组';
-              summaryEl.classList.add('is-placeholder');
+              summaryEl.textContent = '未选择';
+              summaryEl.classList.add('is-empty');
             } else if (n === flat.length && flat.length) {
-              summaryEl.textContent = `已选全部 ${n} 个分组`;
-              summaryEl.classList.remove('is-placeholder');
+              summaryEl.textContent = `已选全部 ${n} 个`;
+              summaryEl.classList.remove('is-empty');
             } else {
-              summaryEl.textContent = `已选 ${n} 个分组`;
-              summaryEl.classList.remove('is-placeholder');
+              summaryEl.textContent = `已选 ${n} 个`;
+              summaryEl.classList.remove('is-empty');
             }
             syncAllCheckbox();
           }
@@ -590,11 +574,6 @@
             });
           }
 
-          trigger?.addEventListener('click', e => {
-            e.preventDefault();
-            setOpen(!(picker && picker.classList.contains('is-open')));
-          });
-
           allCb?.addEventListener('change', () => {
             if (allCb.checked) {
               selected = new Set(flat.map(g => String(g.id)));
@@ -611,7 +590,6 @@
           });
 
           rerenderList();
-          setOpen(true);
         }).catch(e => {
           U.toast(e.message || '加载分组失败', 'error');
         });

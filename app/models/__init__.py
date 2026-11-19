@@ -12,6 +12,7 @@ from app.models.op_log import SysOpLog
 from app.models.policy_task import PolicyDeviceTask, PolicyTask, PolicyTaskItem
 from app.models.role import SysRole, SysRoleMenu
 from app.models.user import User, UserToken
+from app.rag.models import RagAskMessage, RagAskSession, RagFile, RagKnowledgeBase
 
 __all__ = [
     "User",
@@ -38,4 +39,8 @@ __all__ = [
     "PolicyDeviceTask",
     "BizCard",
     "BizCardStep",
+    "RagKnowledgeBase",
+    "RagFile",
+    "RagAskSession",
+    "RagAskMessage",
 ]

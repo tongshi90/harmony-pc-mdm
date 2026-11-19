@@ -25,6 +25,10 @@ from app.models import (  # noqa: F401 — 注册全部模型供 create_all
     PolicyDeviceTask,
     PolicyTask,
     PolicyTaskItem,
+    RagAskMessage,
+    RagAskSession,
+    RagFile,
+    RagKnowledgeBase,
     SysDepartment,
     SysMember,
     SysLogConfig,
@@ -35,18 +39,22 @@ from app.models import (  # noqa: F401 — 注册全部模型供 create_all
     User,
     UserToken,
 )
-from app.utils.security import hash_password, verify_password
 from app.utils.snowflake import snowflake_id
 
 logger = logging.getLogger("mdm.bootstrap")
+
+# 内置 admin 首次种子密码的 bcrypt 哈希（仅不存在时 INSERT；已有用户永不改密）。
+# 对应明文仅见项目文档本地调试说明，不写入 Settings / 环境变量。
+_DEFAULT_ADMIN_PASSWORD_HASH = (
+    "$2b$12$IiiQ6yMr4YIbvA9pvFXLPuPrErMeKPTvtsWnN2uFruqo5Qtbr4GOe"
+)
 
 
 def init_db() -> None:
     """建表 + 确保内置 admin 存在。
 
     调试/演示数据请用根目录脚本：
-      python db_init.py          # 仅 admin
-      python db_init.py --demo   # 全量 Demo
+      python seed_demo.py        # 灌入分组/人员/设备/应用演示数据
     服务启动不再自动灌入业务 Demo，避免覆盖手动重置结果。
 
     SQLite 在 uvicorn --reload / 旧进程未退出时可能短暂 database is locked，做有限重试。
@@ -442,6 +450,24 @@ def _migrate_schema() -> dict[str, bool]:
                         """
                     )
                 )
+        if "expected_mdm_version_id" not in device_cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE t_device ADD COLUMN expected_mdm_version_id BIGINT"
+                    )
+                )
+    # RAG 文件：正式解析开始时间（超时兜底用；排队阶段为空）
+    if "t_rag_file" in tables:
+        rag_file_cols = {c["name"] for c in insp.get_columns("t_rag_file")}
+        if "parse_start_time" not in rag_file_cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE t_rag_file ADD COLUMN parse_start_time DATETIME"
+                    )
+                )
+
     if "t_user" not in tables:
         return flags
     cols = {c["name"] for c in insp.get_columns("t_user")}
@@ -577,7 +603,7 @@ def _backfill_policy_summaries(db: Session) -> None:
 
 
 def _seed_default_admin(db: Session) -> None:
-    """内置 admin：全权限、不绑角色；调试阶段每次启动同步简易密码."""
+    """内置 admin：全权限、不绑角色；仅首次创建写入密码哈希，之后不改密."""
     exists = (
         db.query(User)
         .filter(User.username == settings.default_admin_username, User.is_delete == 0)
@@ -589,9 +615,6 @@ def _seed_default_admin(db: Session) -> None:
         exists.is_delete = 0
         exists.is_admin = 1
         exists.role_id = None  # 不受角色限制
-        # 调试阶段：若密码不是配置中的简易密码则同步过去
-        if not verify_password(settings.default_admin_password, exists.password):
-            exists.password = hash_password(settings.default_admin_password)
         db.commit()
         return
     db.add(
@@ -601,7 +624,7 @@ def _seed_default_admin(db: Session) -> None:
             phone=None,
             email=None,
             username=settings.default_admin_username,
-            password=hash_password(settings.default_admin_password),
+            password=_DEFAULT_ADMIN_PASSWORD_HASH,
             status=1,
             is_delete=0,
             is_admin=1,
