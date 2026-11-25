@@ -37,13 +37,17 @@ def ensure_config(db: Session) -> SysMqttConfig:
     if row:
         return row
     # 库内其余字段用与原先一致的默认值；管理端 api_* 仅作库默认，运行时读 Settings
+    # 若设置了 MDM_MQTT_HOST，首行直接带上，便于 Docker 闭环首次启动即连 Broker
+    env_host = (settings.mqtt_host or "").strip()
+    env_user = (settings.mqtt_username or "").strip() or None
+    env_pass = (settings.mqtt_password or "").strip() or None
     row = SysMqttConfig(
         id=snowflake_id(),
-        host="",
-        port=1883,
+        host=env_host,
+        port=int(settings.mqtt_port or 1883),
         tls=0,
-        username=None,
-        password=None,
+        username=env_user,
+        password=env_pass,
         client_id_prefix="mdm-pc-",
         keep_alive=60,
         qos=1,
@@ -56,6 +60,27 @@ def ensure_config(db: Session) -> SysMqttConfig:
     db.add(row)
     db.commit()
     db.refresh(row)
+    return row
+
+
+def apply_env_mqtt_defaults(db: Session) -> SysMqttConfig:
+    """库内 host 为空且配置了 MDM_MQTT_HOST 时补写，不覆盖已人工配置的地址."""
+    row = ensure_config(db)
+    env_host = (settings.mqtt_host or "").strip()
+    if not env_host or (row.host or "").strip():
+        return row
+    row.host = env_host
+    row.port = int(settings.mqtt_port or 1883)
+    env_user = (settings.mqtt_username or "").strip()
+    env_pass = (settings.mqtt_password or "").strip()
+    if env_user:
+        row.username = env_user
+    if env_pass:
+        row.password = env_pass
+    row.update_time = local_now()
+    db.commit()
+    db.refresh(row)
+    logger.info("已用 MDM_MQTT_HOST=%s 种子写入 MQTT 业务配置", env_host)
     return row
 
 
@@ -150,6 +175,7 @@ def update_config(db: Session, data) -> dict:
 def startup_connect(db: Session) -> None:
     """服务启动时：有有效 MQTT 配置则后台连接；失败只记日志."""
     try:
+        apply_env_mqtt_defaults(db)
         params = load_conn_params(db)
         mqtt_manager.start_background(params)
     except Exception:  # noqa: BLE001

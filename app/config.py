@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     default_admin_name: str = "系统管理员"
     snowflake_worker_id: int = 1
     snowflake_datacenter_id: int = 1
+    # 业务 MQTT Broker（可选种子）：库内 host 为空时，启动用下列环境变量写入
+    # 环境变量：MDM_MQTT_HOST / MDM_MQTT_PORT / MDM_MQTT_USERNAME / MDM_MQTT_PASSWORD
+    # Docker Compose 闭环示例：MDM_MQTT_HOST=emqx
+    mqtt_host: str = ""
+    mqtt_port: int = 1883
+    mqtt_username: str = ""
+    mqtt_password: str = ""
     # EMQX 管理端（Dashboard / 在线查询 REST API）——仅配置文件 / 启动环境变量，平台侧不可改
     # 环境变量：MDM_MQTT_API_HOST / MDM_MQTT_API_PORT / MDM_MQTT_API_USERNAME / MDM_MQTT_API_PASSWORD
     # mqtt_api_host 为空时回落业务 MQTT 的 host（t_sys_mqtt_config.host）
@@ -36,36 +43,66 @@ class Settings(BaseSettings):
     # 环境变量：MDM_AGENT_BUNDLE_NAME
     agent_bundle_name: str = "com.huawei.mdm.demo"
 
-    # ------------------------------------------------------------------
-    # RAG 知识库（企业规章制度问答；模块代码在 app/rag/）
-    # 环境变量统一前缀 MDM_，例如 MDM_RAG_SILICONFLOW_API_KEY
-    # 未配置 API Key 时：管理台仍可建库/上传，向量化与提问会失败并提示配置
-    # ------------------------------------------------------------------
-    # SiliconFlow API Key（Embedding / Rerank / Chat 共用）
-    
+    # ==================================================================
+    # RAG 知识库（模块：app/rag/；引擎：仓库根 lightrag/）
+    # 环境变量统一前缀 MDM_（字段名大写，例如 rag_chat_model → MDM_RAG_CHAT_MODEL）
+    # 当前默认均指向硅基流动 SiliconFlow；改 URL/Key/模型名即可换兼容服务
+    # 未配置 API Key 时：仍可建库/上传，向量化与提问会失败并提示配置
+    # ==================================================================
+
+    # ---- 在线模型（共用 Key + 各环节 URL/模型名）----
+    # 共用 API Key：Embedding / Rerank / Chat 生成 / 问题改写拆分 / 图片 VL
+    # 环境变量：MDM_RAG_SILICONFLOW_API_KEY
     rag_siliconflow_api_key: str = "sk-peeqhweinlldybquwghxeylhydqqscjrkzxrxnznboqfbgpm"
-    # Chat（管理台调试提问生成答案）
+
+    # 【提问 · 生成答案】主 Chat
+    # 环节：根据检索上下文生成最终回答（管理台 / 设备侧）
+    # 环境变量：MDM_RAG_CHAT_URL / MDM_RAG_CHAT_MODEL
+    # 引擎侧会把 chat URL 推导为 OpenAI 兼容 base（去掉 /chat/completions → …/v1）
     rag_chat_url: str = "https://api.siliconflow.cn/v1/chat/completions"
     rag_chat_model: str = "Qwen/Qwen2.5-72B-Instruct"
     rag_chat_timeout: int = 60
     rag_chat_max_tokens: int = 4096
     rag_chat_temperature: float = 0.5
-    # Embedding（文档切片向量化）
+
+    # 【入库 · 向量化】Embedding（编辑切片重向量化共用）
+    # 环节：把文字段转为向量写入本地；检索时本地算相似度，不再调在线模型
+    # 环境变量：MDM_RAG_EMBEDDING_URL / MDM_RAG_EMBEDDING_MODEL
+    # 更换 embedding 模型或维度后，需清空 data/rag/lightrag 并重新入库
     rag_embedding_url: str = "https://api.siliconflow.cn/v1/embeddings"
     rag_embedding_model: str = "Qwen/Qwen3-Embedding-4B"
     rag_embedding_timeout: int = 90
     rag_embedding_batch_size: int = 10
-    # Rerank（检索后重排）
+    rag_embedding_dim: int = 2560
+    rag_embedding_max_tokens: int = 8192
+
+    # 【提问 · 重排序】Rerank
+    # 环节：多库检索合并后，按与问题相关性重排，再取 TopK 送生成
+    # 注意：此处为完整 rerank 接口 URL（不是 …/v1 base）
+    # 环境变量：MDM_RAG_RERANK_URL / MDM_RAG_RERANK_MODEL
     rag_rerank_url: str = "https://api.siliconflow.cn/v1/rerank"
     rag_rerank_model: str = "Qwen/Qwen3-Reranker-0.6B"
     rag_rerank_timeout: int = 30
-    # 轻量 LLM（问题拆分等）
+
+    # 【提问 · 问题改写 / 问题拆分】轻量 Chat
+    # 环节：有对话历史时改写为可独立检索的问句；复合问题拆成子问题
+    # URL 复用 rag_chat_url；仅模型名与超时/温度单独配置
+    # 环境变量：MDM_RAG_TEXT_SPLITTER_MODEL
     rag_text_splitter_model: str = "Qwen/Qwen2.5-7B-Instruct"
     rag_text_splitter_timeout: int = 60
     rag_text_splitter_temperature: float = 0.3
-    # Embedding 维度（Qwen3-Embedding-4B 常用 2560；更换模型后需清空 LightRAG 数据重灌）
-    rag_embedding_dim: int = 2560
-    rag_embedding_max_tokens: int = 8192
+
+    # 【入库 · 图片转写】多模态 VL
+    # 环节：PDF / Word / PPT 插图 → 文字，供后续切分与向量化
+    # URL 默认与主 Chat 相同（硅基流动 chat/completions）；模型为视觉模型
+    # 环境变量：MDM_RAG_VL_URL / MDM_RAG_VL_MODEL
+    # 未单独配置 VL URL 时回落 rag_chat_url
+    rag_vl_url: str = ""
+    rag_vl_model: str = "Qwen/Qwen3-VL-8B-Instruct"
+    rag_vl_timeout: int = 90
+    rag_vl_max_tokens: int = 1200
+
+    # ---- RAG 业务参数（非模型厂商）----
     # 本地存储：默认 data/rag/；可改为绝对路径或相对 data/ 的子路径
     rag_data_dir: str = "rag"
     rag_upload_dir: str = ""  # 空则 data/rag/upload
@@ -73,7 +110,7 @@ class Settings(BaseSettings):
     # 单文件上传上限（字节），默认 32MB
     rag_max_upload_bytes: int = 32 * 1024 * 1024
     # 入库切分器：split_v2（Plan A/B + 尺寸治理）| rag_project（旧 TitleDetector）
-    # 环境变量：MDM_RAG_SPLITTER；切换后已入库文件需重切（见 scripts/reingest_rag.py）
+    # 环境变量：MDM_RAG_SPLITTER；切换后已入库文件需重切
     rag_splitter: str = "split_v2"
     # 单文件入库超时（秒）：从 worker 正式开始解析起算，排队等待不计；默认 2 小时
     rag_ingest_timeout_seconds: int = 7200

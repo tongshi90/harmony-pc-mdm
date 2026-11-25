@@ -55,9 +55,21 @@ python run.py
 .\.venv\Scripts\python.exe project_init.py -y
 ```
 
-### 本地 MQTT（EMQX，闭环联调）
+### Docker 完整闭环（推荐）
 
-策略催拉、设备在线状态等依赖 MQTT。可用 Docker 起一套与本仓默认管理端账号对齐的 EMQX：
+镜像已包含 `app/`、`web/`、内嵌 `lightrag/`。一键起云侧 + EMQX：
+
+```powershell
+docker compose up -d --build
+```
+
+- 管理台：`http://localhost:8080`（`admin` / `Ab12345678`，仅首次空库）
+- EMQX Dashboard：`http://localhost:18083`（`admin` / `Nv7Kq2Rm9Xp4Tw6B`）
+- Compose 通过 `MDM_MQTT_HOST=emqx` 等环境变量在首次空库时自动写入 MQTT 配置
+- 知识库需能访问 SiliconFlow（可用 `.env` 设置 `MDM_RAG_SILICONFLOW_API_KEY`）
+- 更细步骤见 `docker_run_step.txt`
+
+### 本地仅起 EMQX（不用 compose 时）
 
 ```powershell
 docker run -d --name emqx --restart unless-stopped `
@@ -68,9 +80,8 @@ docker run -d --name emqx --restart unless-stopped `
   emqx/emqx:5.8.3
 ```
 
-- Dashboard：`http://localhost:18083`（账号 `admin`，密码与上、`config.py` 中 `mqtt_api_password` 一致）
-- 管理台「平台基础管理 · MQTT」填写 Host（本机 `127.0.0.1`）、端口 `1883` 并保存连通
-- 管理 API 默认读 `MDM_MQTT_API_*`（端口 `18083`）；若改了 Dashboard 密码，同步改环境变量或 `config.py`
+- 管理台「平台基础管理 · MQTT」填写 Host（本机 `127.0.0.1`）、端口 `1883` 并保存
+- 管理 API 读 `MDM_MQTT_API_*`（默认端口 `18083`）
 
 ## 目录结构
 

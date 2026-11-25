@@ -1,13 +1,72 @@
-# 镜像打包
-docker build -t harmony-pc-mdm:latest .
+# Harmony PC MDM · Docker 使用说明
 
-# 赋予权限
-mkdir -p /home/p40/ts/harmony-pc-mdm/uploads
+## 推荐：完整闭环（MDM + EMQX）
 
-# 启动
-docker run -d \
-  --name harmony-pc-mdm \
-  --restart unless-stopped \
-  -p 8086:8080 \
-  -v /home/p40/ts/harmony-pc-mdm:/app/data \
-  harmony-pc-mdm:latest
+在仓库根目录执行：
+
+  docker compose up -d --build
+
+或：
+
+  bash docker-start.sh
+
+访问：
+  管理台        http://localhost:8080
+  默认账号      admin / Ab12345678（仅首次空库种子）
+  EMQX Dashboard http://localhost:18083
+  EMQX 账号     admin / Nv7Kq2Rm9Xp4Tw6B
+
+Compose 已将 MDM_MQTT_HOST / MDM_MQTT_API_HOST 指向服务名 emqx，
+首次空库启动会自动写入业务 MQTT 配置并后台连接。
+
+知识库入库/提问需能访问 SiliconFlow（或自有兼容接口）。
+可用环境变量覆盖密钥，例如创建 .env：
+
+  MDM_RAG_SILICONFLOW_API_KEY=sk-你的密钥
+
+停止：
+
+  docker compose down
+
+数据卷：compose 使用命名卷 mdm-data（SQLite / RSA / 上传 / RAG 向量）。
+若要清空重来：docker compose down -v
+
+
+## 仅构建镜像
+
+  docker build -t harmony-pc-mdm:latest .
+
+镜像内已包含：app/、web/、lightrag/（内嵌 RAG 引擎）。
+勿再对外部 LightRAG 做 pip install -e，也勿安装 lightrag-hku。
+
+
+## 单容器运行（不含 EMQX）
+
+适合已有外部 Broker 的环境：
+
+  mkdir -p ./data-docker/uploads
+
+  docker run -d \
+    --name harmony-pc-mdm \
+    --restart unless-stopped \
+    -p 8080:8080 \
+    -v "$(pwd)/data-docker:/app/data" \
+    -e MDM_MQTT_HOST=你的Broker地址 \
+    -e MDM_MQTT_PORT=1883 \
+    -e MDM_MQTT_API_HOST=你的Broker地址 \
+    -e MDM_MQTT_API_PORT=18083 \
+    -e MDM_MQTT_API_USERNAME=admin \
+    -e MDM_MQTT_API_PASSWORD=你的Dashboard密码 \
+    -e MDM_RAG_SILICONFLOW_API_KEY=sk-你的密钥 \
+    harmony-pc-mdm:latest
+
+或：
+
+  bash docker-start.sh single
+
+
+## 说明
+
+- 容器工作目录 /app，PYTHONPATH=/app，保证导入本仓 lightrag 包
+- 持久化请挂载 /app/data
+- MQTT 种子规则：仅当库内 host 为空且设置了 MDM_MQTT_HOST 时写入，不覆盖已有配置

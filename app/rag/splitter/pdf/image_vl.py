@@ -1,12 +1,10 @@
-"""图片 → 文本：调用 SiliconFlow 多模态 Chat（可选）。
+"""图片 → 文本：调用多模态 Chat（可选）。
 
-Key 读取顺序：
-  1. 环境变量 MDM_RAG_SILICONFLOW_API_KEY
-  2. 仓库根目录 .env（若安装了 python-dotenv）
-  3. 同进程可 import 时回退 app.config.settings（仅实验入口方便）
-
-另支持：
-  MDM_RAG_VL_MODEL / MDM_RAG_CHAT_URL
+模型 / URL / Key / 超时一律读 ``app.config.settings``（见「在线模型」段）：
+  - Key：``rag_siliconflow_api_key``（MDM_RAG_SILICONFLOW_API_KEY）
+  - URL：``rag_vl_url``，空则回落 ``rag_chat_url``
+  - 模型：``rag_vl_model``（MDM_RAG_VL_MODEL）
+  - 超时 / max_tokens：``rag_vl_timeout`` / ``rag_vl_max_tokens``
 
 无 Key 时：仍会尝试读本地 _vl_cache；都没有则保留空 text。
 """
@@ -17,8 +15,6 @@ import base64
 import hashlib
 import json
 import logging
-import os
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -27,10 +23,6 @@ logger = logging.getLogger(__name__)
 # 本地实验默认开启；无 Key 且无缓存时自动跳过网络调用
 ENABLE_IMAGE_VL = True
 
-DEFAULT_CHAT_URL = "https://api.siliconflow.cn/v1/chat/completions"
-DEFAULT_VL_MODEL = "Qwen/Qwen3-VL-8B-Instruct"
-DEFAULT_TIMEOUT = 90
-DEFAULT_MAX_TOKENS = 1200
 # 缓存文件名带版本；改 prompt/清洗策略/取图方式时递增，避免继续命中坏结果
 CACHE_VERSION = "v6"
 # 疑似没写完时自动再请求一次
@@ -50,60 +42,36 @@ _VL_PROMPT = """你是企业规章制度 PDF 的插图转写器。用简体中�
 _KEY_RESOLVED_FROM: str | None = None
 
 
-def _repo_root() -> Path:
-    # split/pdf/image_vl.py → 仓库根
-    return Path(__file__).resolve().parents[2]
+def _settings():
+    from app.config import settings
+
+    return settings
 
 
 def _api_key() -> str:
-    """解析 API Key，并记录来源便于日志。"""
+    """从 app.config 读取共用 API Key。"""
     global _KEY_RESOLVED_FROM
-    env = (os.environ.get("MDM_RAG_SILICONFLOW_API_KEY") or "").strip()
-    if env:
-        _KEY_RESOLVED_FROM = "env"
-        return env
-
-    # .env
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv(_repo_root() / ".env", override=False)
-        env = (os.environ.get("MDM_RAG_SILICONFLOW_API_KEY") or "").strip()
-        if env:
-            _KEY_RESOLVED_FROM = "dotenv"
-            return env
-    except Exception:
-        pass
-
-    # 实验便利：回退云侧 Settings 默认值（split 业务模块仍不硬依赖 app）
-    try:
-        root = str(_repo_root())
-        if root not in sys.path:
-            sys.path.insert(0, root)
-        from app.config import settings  # type: ignore
-
-        key = (settings.rag_siliconflow_api_key or "").strip()
-        if key:
-            os.environ.setdefault("MDM_RAG_SILICONFLOW_API_KEY", key)
-            _KEY_RESOLVED_FROM = "app.config"
-            return key
-    except Exception:
-        pass
-
-    _KEY_RESOLVED_FROM = None
-    return ""
+    key = (_settings().rag_siliconflow_api_key or "").strip()
+    _KEY_RESOLVED_FROM = "app.config" if key else None
+    return key
 
 
 def _chat_url() -> str:
-    return (
-        os.environ.get("MDM_RAG_CHAT_URL") or DEFAULT_CHAT_URL
-    ).strip() or DEFAULT_CHAT_URL
+    """VL 接口 URL：优先 rag_vl_url，否则回落主 Chat URL（均来自 app.config）。"""
+    s = _settings()
+    return (s.rag_vl_url or "").strip() or (s.rag_chat_url or "").strip()
 
 
 def _vl_model() -> str:
-    return (
-        os.environ.get("MDM_RAG_VL_MODEL") or DEFAULT_VL_MODEL
-    ).strip() or DEFAULT_VL_MODEL
+    return (_settings().rag_vl_model or "").strip()
+
+
+def _vl_timeout() -> int:
+    return int(_settings().rag_vl_timeout or 90) or 90
+
+
+def _vl_max_tokens() -> int:
+    return int(_settings().rag_vl_max_tokens or 1200) or 1200
 
 
 def _mime_for_format(fmt: str) -> str:
@@ -226,7 +194,7 @@ def _call_vl_once(
                 ],
             }
         ],
-        "max_tokens": DEFAULT_MAX_TOKENS,
+        "max_tokens": _vl_max_tokens(),
         "temperature": temperature,
     }
     try:
@@ -237,7 +205,7 @@ def _call_vl_once(
                 "Content-Type": "application/json",
             },
             data=json.dumps(payload),
-            timeout=DEFAULT_TIMEOUT,
+            timeout=_vl_timeout(),
         )
         if resp.status_code >= 400:
             logger.warning(

@@ -1,8 +1,8 @@
 """
-RAG 轻量 LLM 配置（SiliconFlow）。
+RAG 轻量 LLM 客户端（问题改写 / 子问题拆分）。
 
-当前主链路仅用于问题改写 / 子问题拆分（``get_text_splitter_llm``）。
-Embedding / Rerank / 主生成走 LightRAG 内的 OpenAI 兼容客户端。
+Key / URL / 模型名一律来自 ``app.config.settings``（在线模型段），本文件不另存默认厂商地址。
+Embedding / Rerank / 主生成见 ``app.rag.lightrag_engine``；图片 VL 见 ``splitter.pdf.image_vl``。
 """
 
 from __future__ import annotations
@@ -67,9 +67,7 @@ class ChatModel(ABC):
 class SiliconFlowChat(ChatModel):
     def __init__(self, model: Optional[str] = None) -> None:
         self.api_key = get_config("SILICONFLOW_API_KEY")
-        self.api_url = get_config(
-            "SILICONFLOW_CHAT_URL", "https://api.siliconflow.cn/v1/chat/completions"
-        )
+        self.api_url = get_config("SILICONFLOW_CHAT_URL")
         self.model = model or get_config("SILICONFLOW_CHAT_MODEL")
         self.timeout = get_int_config("CHAT_TIMEOUT", 60)
         self.max_tokens = get_int_config("CHAT_MAX_TOKENS", 4096)
@@ -106,8 +104,4 @@ class SiliconFlowChat(ChatModel):
 
 
 def get_text_splitter_llm() -> ChatModel:
-    return SiliconFlowChat(
-        model=get_config(
-            "SILICONFLOW_TEXT_SPLITTER_MODEL", "Qwen/Qwen2.5-7B-Instruct"
-        )
-    )
+    return SiliconFlowChat(model=get_config("SILICONFLOW_TEXT_SPLITTER_MODEL"))

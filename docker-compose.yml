@@ -1,0 +1,57 @@
+# Harmony PC MDM 完整闭环：云侧服务 + EMQX
+#
+# 启动：
+#   docker compose up -d --build
+# 访问：
+#   管理台 http://localhost:8080  （admin / Ab12345678，仅首次空库种子）
+#   EMQX Dashboard http://localhost:18083  （admin / Nv7Kq2Rm9Xp4Tw6B）
+#
+# 知识库向量化/提问需能访问 SiliconFlow（或通过环境变量改成自有兼容接口）。
+# 可用 .env 覆盖：MDM_RAG_SILICONFLOW_API_KEY=sk-...
+
+services:
+  emqx:
+    image: emqx/emqx:5.8.3
+    container_name: harmony-pc-mdm-emqx
+    restart: unless-stopped
+    environment:
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: Nv7Kq2Rm9Xp4Tw6B
+    ports:
+      - "1883:1883"
+      - "18083:18083"
+    healthcheck:
+      test: ["CMD", "emqx", "ctl", "status"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+
+  mdm:
+    build: .
+    image: harmony-pc-mdm:latest
+    container_name: harmony-pc-mdm
+    restart: unless-stopped
+    depends_on:
+      emqx:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - mdm-data:/app/data
+    environment:
+      MDM_DEBUG: "false"
+      MDM_DATABASE_URL: sqlite:////app/data/mdm.db
+      # 业务 MQTT → 同网络内的 emqx 服务名
+      MDM_MQTT_HOST: emqx
+      MDM_MQTT_PORT: "1883"
+      # EMQX 管理 API（设备在线查询等）
+      MDM_MQTT_API_HOST: emqx
+      MDM_MQTT_API_PORT: "18083"
+      MDM_MQTT_API_USERNAME: admin
+      MDM_MQTT_API_PASSWORD: Nv7Kq2Rm9Xp4Tw6B
+      # 知识库：未设置时沿用镜像/代码内默认；生产请用 .env 覆盖
+      # MDM_RAG_SILICONFLOW_API_KEY: ${MDM_RAG_SILICONFLOW_API_KEY:-}
+
+volumes:
+  mdm-data:

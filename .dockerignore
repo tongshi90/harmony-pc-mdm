@@ -12,25 +12,23 @@ __pycache__
 *.log
 .DS_Store
 
-# 本地数据与密钥不进镜像（运行时用 volume）
-data/*.db
-data/*.db-*
-data/*.pem
-data/rsa_*.pem
-data/uploads/**
-data/_docx_*
-data/_schema_*
+# 本地运行时数据与密钥不进镜像（容器内挂载 /app/data）
+data/
 
-# 端侧模拟器 / 文档 / 脚本（镜像不需要）
+# 端侧模拟器 / 文档 / 本地脚本（镜像不需要）
 device/
 docs/
 *.docx
-*.md
 待办.txt
 CLAUDE.md
 db_init.py
+project_init.py
+seed_demo.py
 start.ps1
 run.py
+docker-start.sh
+docker_run_step.txt
+.gstack/
 
 # 其它
 _doc_extract.txt

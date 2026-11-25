@@ -115,7 +115,7 @@ def _stage_file_for_ingest(kb_id: str | int, file_path: str | Path) -> Path:
 
 
 def _siliconflow_base_url() -> str:
-    """从 chat/embedding URL 推导 OpenAI 兼容 base（…/v1）。"""
+    """从 app.config 的 chat/embedding URL 推导 OpenAI 兼容 base（…/v1）。"""
     for raw in (settings.rag_chat_url, settings.rag_embedding_url):
         url = (raw or "").strip().rstrip("/")
         if not url:
@@ -126,7 +126,9 @@ def _siliconflow_base_url() -> str:
             return url[: -len("/embeddings")]
         if url.endswith("/v1"):
             return url
-    return "https://api.siliconflow.cn/v1"
+    raise RuntimeError(
+        "无法从 MDM_RAG_CHAT_URL / MDM_RAG_EMBEDDING_URL 推导 base URL，请检查 app.config"
+    )
 
 
 def _api_key() -> str:
