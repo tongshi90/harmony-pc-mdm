@@ -2208,6 +2208,9 @@ window.MDMUtils = {
     appDetail: '/pages/apps/app-detail.html',
     appForm: '/pages/apps/app-form.html',
     appVersionForm: '/pages/apps/app-version-form.html',
+    certs: '/pages/apps/certs.html',
+    /** 旧「应用商店调试」入口 → 证书 */
+    store: '/pages/apps/certs.html',
     /** 兼容旧指令/策略库/任务页 → 策略下发 */
     commands: '/pages/scenes/scene-dispatch.html',
     commandForm: '/pages/scenes/scene-dispatch.html',
@@ -2221,7 +2224,8 @@ window.MDMUtils = {
     sceneDispatchDetail: '/pages/scenes/scene-dispatch-detail.html',
     ragKnowledgeBases: '/pages/rag/knowledge-bases.html',
     ragKnowledgeBaseDetail: '/pages/rag/knowledge-base-detail.html',
-    ragAsk: '/pages/rag/ask.html'
+    ragAsk: '/pages/rag/ask.html',
+    store: '/pages/store/index.html'
   },
 
   /** 策略类型文案（与客户端统一：紧急 / 普通） */
@@ -2375,13 +2379,13 @@ window.MDMUtils = {
         ${this.filePickerHtml({
           zoneId,
           inputId,
-          accept: '.hap,application/octet-stream',
-          title: '点击选择 .hap 安装包',
+          accept: '.hap,.app,.sap,application/octet-stream',
+          title: '点击选择 .hap / .app 安装包',
           compact: true
         })}
       </div>
       <div class="hap-pkg-preview" id="${this.escapeAttr(previewId)}"${filled ? '' : ' hidden'}>
-        <img class="hap-pkg-icon" src="${this.HAP_PACKAGE_ICON}" alt="HAP 安装包" width="52" height="52">
+        <img class="hap-pkg-icon" src="${this.HAP_PACKAGE_ICON}" alt="安装包" width="52" height="52">
         <div class="hap-pkg-preview-meta">
           <div class="hap-pkg-name">${this.escapeAttr(fileName || '安装包.hap')}</div>
           <div class="hap-pkg-size"${sizeText ? '' : ' hidden'}>${this.escapeAttr(sizeText)}</div>
@@ -2424,8 +2428,8 @@ window.MDMUtils = {
     const picker = this.bindFilePicker({
       zoneId,
       inputId,
-      acceptExt: ['.hap'],
-      emptyTitle: '点击选择 .hap 安装包',
+      acceptExt: opts.acceptExt || ['.hap', '.app', '.sap'],
+      emptyTitle: opts.emptyTitle || '点击选择 .hap / .app 安装包',
       onChange(file) {
         selectedFile = file;
         if (file) {

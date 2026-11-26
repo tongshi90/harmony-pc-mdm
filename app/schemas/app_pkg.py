@@ -4,19 +4,16 @@ from pydantic import BaseModel, Field
 
 
 class AppCreate(BaseModel):
+    """新建应用：仅需名称与 Bundle Name；App ID / 应用编码由平台自动生成，版本另行上传."""
+
     app_name: str = Field(..., min_length=1, max_length=64)
-    app_code: str = Field(..., min_length=1, max_length=64)
-    app_id: str = Field(..., min_length=1, max_length=128, description="端侧 AppIdentifier")
     bundle_name: str = Field(..., min_length=1, max_length=128, description="端侧 Bundle Name")
     description: str | None = None
     status: int = Field(1, ge=0, le=1)
-    # 首个版本（安装包通过独立上传接口绑定；包名统一用应用 Bundle Name）
-    version_name: str = Field("1.0.0", min_length=1, max_length=64)
-    version_code: str = Field("100", min_length=1, max_length=20)
 
 
 class AppUpdate(BaseModel):
-    """编辑仅允许改名称、描述、图标；上下架走 status。App ID / Bundle Name / 编码创建后不可改."""
+    """编辑仅允许改名称、描述、图标；上下架走 status。App ID / Bundle Name / 应用编码创建后不可改."""
 
     app_name: str | None = Field(None, min_length=1, max_length=64)
     description: str | None = None
@@ -34,6 +31,12 @@ class AppVersionUpdate(BaseModel):
     version_name: str | None = Field(None, min_length=1, max_length=64)
     version_code: str | None = Field(None, min_length=1, max_length=20)
     status: int | None = Field(None, ge=0, le=3)
+
+
+class AppProfileCreate(BaseModel):
+    profile_name: str = Field(..., min_length=1, max_length=128)
+    # 雪花 ID：前端以字符串提交，避免 JS 精度丢失
+    cert_id: str | int
 
 
 class AppBatchInstallIn(BaseModel):

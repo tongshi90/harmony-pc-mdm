@@ -11,6 +11,7 @@ from app.api import (
     member_group,
     platform,
     policy_dispatch,
+    store,
 )
 from app.rag.api import router as rag_router
 
@@ -27,6 +28,7 @@ api_router.include_router(app_pkg.router, prefix="/app", tags=["应用管理"])
 api_router.include_router(
     app_pkg.public_router, prefix="/app", tags=["应用管理-安装包下载"]
 )
+api_router.include_router(store.router, prefix="/store", tags=["应用商店调试"])
 api_router.include_router(
     member_group.router, prefix="/member-group", tags=["成员分组"]
 )

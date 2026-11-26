@@ -18,7 +18,7 @@ if [[ "${MODE}" == "compose" ]]; then
   echo "启动完整闭环（MDM + EMQX）..."
   docker compose up -d --build
   echo "已启动。"
-  echo "  管理台: http://<服务器IP>:8080  （admin / Ab12345678，仅首次空库）"
+  echo "  管理台: http://<服务器IP>:8080  （admin / 12345678，仅首次空库）"
   echo "  EMQX:   http://<服务器IP>:18083 （admin / Nv7Kq2Rm9Xp4Tw6B）"
   echo "日志: docker compose logs -f mdm"
   exit 0

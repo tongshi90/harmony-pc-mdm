@@ -4,10 +4,8 @@
   const isEdit = !!editId;
 
   let app = null;
-  let selectedFile = null;
   let selectedIcon = null;
   let clearIcon = false;
-  let pkgField = null;
 
   if (isEdit) {
     try {
@@ -61,30 +59,16 @@
   const createContent = `
       <div class="panel">
         <div class="panel-body">
-          <div class="form-section-title">应用实体</div>
+          <div class="form-section-title">应用信息</div>
+          <p class="param-hint" style="margin:0 0 12px">先创建应用实体；<strong>App ID</strong> 由云平台自动生成。创建成功后请在应用详情中<strong>新建版本并上传安装包</strong>。</p>
           <div class="form-grid">
             ${iconBlock}
             <div class="form-item"><label class="form-label">应用名称 <span style="color:var(--error)">*</span></label>
               <input class="form-input" id="f-name" placeholder="如 企业微信"></div>
-            <div class="form-item"><label class="form-label">应用编码 <span style="color:var(--error)">*</span></label>
-              <input class="form-input" id="f-code" placeholder="全局唯一，如 com.company.app"></div>
-            <div class="form-item"><label class="form-label">App ID <span style="color:var(--error)">*</span></label>
-              <input class="form-input" id="f-app-id" placeholder="端侧 AppIdentifier，暂入手填"></div>
             <div class="form-item"><label class="form-label">Bundle Name <span style="color:var(--error)">*</span></label>
               <input class="form-input" id="f-bundle" placeholder="端侧包名，如 com.company.app"></div>
             <div class="form-item full"><label class="form-label">应用描述</label>
               <textarea class="form-textarea" id="f-desc" placeholder="应用说明、用途"></textarea></div>
-          </div>
-          <div class="form-section-title">应用版本</div>
-          <p class="param-hint">创建应用时将<strong>同时生成一个应用版本</strong>（默认已发布）；请上传 <strong>.hap</strong> 安装包。</p>
-          <div class="form-grid">
-            <div class="form-item"><label class="form-label">版本名称 <span style="color:var(--error)">*</span></label>
-              <input class="form-input" id="f-ver-name" value="1.0.0"></div>
-            <div class="form-item"><label class="form-label">版本号 <span style="color:var(--error)">*</span></label>
-              <input class="form-input" id="f-ver-code" value="100" placeholder="如 100 / 30201"></div>
-            <div class="form-item full"><label class="form-label">安装包（.hap） <span style="color:var(--error)">*</span></label>
-              ${U.hapPackageFieldHtml()}
-            </div>
           </div>
         </div>
       </div>`;
@@ -111,7 +95,7 @@
             <div class="form-item full"><label class="form-label">应用描述</label>
               <textarea class="form-textarea" id="f-desc">${escText(app.description)}</textarea></div>
           </div>
-          <p class="param-hint" style="margin-top:8px">应用编码、App ID、Bundle Name 创建后不可修改；版本管理请在应用详情中操作。</p>
+          <p class="param-hint" style="margin-top:8px">App ID、Bundle Name、应用编码创建后不可修改；版本与安装包请在应用详情中管理。</p>
         </div>
       </div>` : '';
 
@@ -171,12 +155,6 @@
       });
       refreshIconUi();
 
-      if (!isEdit) {
-        pkgField = U.bindHapPackageField({
-          onChange(f) { selectedFile = f; }
-        });
-      }
-
       async function syncIcon(appId) {
         if (selectedIcon) {
           await MDMApi.uploadAppIcon(appId, selectedIcon);
@@ -208,43 +186,23 @@
         }
 
         const app_name = document.getElementById('f-name').value.trim();
-        const app_code = document.getElementById('f-code').value.trim();
-        const app_id = document.getElementById('f-app-id').value.trim();
         const bundle_name = document.getElementById('f-bundle').value.trim();
-        const version_name = document.getElementById('f-ver-name').value.trim() || '1.0.0';
-        const version_code = document.getElementById('f-ver-code').value.trim() || '100';
-        if (!app_name || !app_code) {
-          U.toast('请填写应用名称与编码', 'error');
+        if (!app_name) {
+          U.toast('请填写应用名称', 'error');
           return;
         }
-        if (!app_id || !bundle_name) {
-          U.toast('请填写 App ID 与 Bundle Name', 'error');
-          return;
-        }
-        selectedFile = pkgField ? pkgField.getFile() : selectedFile;
-        if (!selectedFile) {
-          U.toast('请上传 .hap 安装包', 'error');
+        if (!bundle_name) {
+          U.toast('请填写 Bundle Name', 'error');
           return;
         }
         try {
           const created = await MDMApi.createApp({
             app_name,
-            app_code,
-            app_id,
             bundle_name,
-            description: document.getElementById('f-desc').value.trim(),
-            version_name,
-            version_code
+            description: document.getElementById('f-desc').value.trim()
           });
-          const firstVer = (created.versions || [])[0];
-          if (!firstVer) {
-            U.toast('应用已创建但未生成初始版本', 'error');
-            location.href = U.href('appDetail', { id: created.id });
-            return;
-          }
-          await MDMApi.uploadAppPackage(created.id, firstVer.id, selectedFile);
           await syncIcon(created.id);
-          U.toast('应用及安装包已创建');
+          U.toast('应用已创建，请继续上传版本安装包');
           location.href = U.href('appDetail', { id: created.id });
         } catch (e) {
           U.toast(e.message || '创建失败', 'error');

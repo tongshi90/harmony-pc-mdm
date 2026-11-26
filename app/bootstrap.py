@@ -29,6 +29,10 @@ from app.models import (  # noqa: F401 — 注册全部模型供 create_all
     RagAskSession,
     RagFile,
     RagKnowledgeBase,
+    StoreApp,
+    StoreAppVersion,
+    StoreCert,
+    StoreProfile,
     SysDepartment,
     SysMember,
     SysLogConfig,
@@ -46,7 +50,7 @@ logger = logging.getLogger("mdm.bootstrap")
 # 内置 admin 首次种子密码的 bcrypt 哈希（仅不存在时 INSERT；已有用户永不改密）。
 # 对应明文仅见项目文档本地调试说明，不写入 Settings / 环境变量。
 _DEFAULT_ADMIN_PASSWORD_HASH = (
-    "$2b$12$IiiQ6yMr4YIbvA9pvFXLPuPrErMeKPTvtsWnN2uFruqo5Qtbr4GOe"
+    "$2b$12$yTBoEDeT9EOkznd7RHh.Vek8UR3U3ziQftmh4SeKbdqdHaBQFKt7m"
 )
 
 

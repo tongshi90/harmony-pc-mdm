@@ -400,13 +400,14 @@
     deleteAppVersion(appId, versionId) {
       return request(`/platform/app/${appId}/versions/${versionId}`, { method: 'DELETE' });
     },
-    async uploadAppPackage(appId, versionId, file) {
+    async uploadAppPackage(appId, versionId, file, opts = {}) {
       const headers = {};
       const token = getToken();
       if (token) headers.Authorization = `Bearer ${token}`;
       const fd = new FormData();
       fd.append('file', file);
-      const resp = await fetch(`/platform/app/${appId}/versions/${versionId}/package`, {
+      const q = opts.resign ? '?resign=true' : '';
+      const resp = await fetch(`/platform/app/${appId}/versions/${versionId}/package${q}`, {
         method: 'POST',
         headers,
         body: fd
@@ -420,6 +421,11 @@
       }
       if (data.code !== 0) throw new Error(data.message || '上传失败');
       return data.data;
+    },
+    resignAppPackage(appId, versionId) {
+      return request(`/platform/app/${appId}/versions/${versionId}/resign`, {
+        method: 'POST'
+      });
     },
     async uploadAppIcon(appId, file) {
       const headers = {};
@@ -898,6 +904,170 @@
       if (streamError) throw new Error(streamError);
       if (!finalData) throw new Error('流式回答未完整结束');
       return finalData;
+    },
+
+    /* ---- 应用管理 · 证书（接口仍挂 /platform/store） ---- */
+    listStoreCerts() {
+      return request('/platform/store/certs');
+    },
+    getStoreSignStatus() {
+      return request('/platform/store/sign-status');
+    },
+    listAppCertOptions() {
+      return request('/platform/app/cert-options');
+    },
+    listAppProfiles(appId) {
+      return request(`/platform/app/${appId}/profiles`);
+    },
+    createAppProfile(appId, payload) {
+      return request(`/platform/app/${appId}/profiles`, {
+        method: 'POST',
+        body: payload
+      });
+    },
+    deleteAppProfile(appId, profileId) {
+      return request(`/platform/app/${appId}/profiles/${profileId}`, {
+        method: 'DELETE'
+      });
+    },
+    /* ---- 应用商店调试遗留（侧栏已隐藏） ---- */
+    async addStoreCert(certName, file) {
+      const headers = {};
+      const token = getToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const fd = new FormData();
+      fd.append('cert_name', certName);
+      fd.append('file', file);
+      const resp = await fetch('/platform/store/certs', {
+        method: 'POST',
+        headers,
+        body: fd
+      });
+      let data;
+      try { data = await resp.json(); } catch { throw new Error('服务器响应异常'); }
+      if (resp.status === 401 || data.code === 401) {
+        clearSession();
+        if (!location.pathname.endsWith('/login.html')) location.href = '/login.html';
+        throw new Error(data.message || '未登录');
+      }
+      if (data.code !== 0) throw new Error(data.message || '上传失败');
+      return data.data;
+    },
+    deleteStoreCert(id) {
+      return request(`/platform/store/certs/${id}`, { method: 'DELETE' });
+    },
+    listStoreApps(params = {}) {
+      const q = new URLSearchParams();
+      if (params.keyword) q.set('keyword', params.keyword);
+      q.set('page', String(params.page || 1));
+      q.set('page_size', String(params.page_size || 12));
+      return request(`/platform/store/apps?${q.toString()}`);
+    },
+    getStoreApp(id) {
+      return request(`/platform/store/apps/${id}`);
+    },
+    createStoreApp(payload) {
+      return request('/platform/store/apps', { method: 'POST', body: payload });
+    },
+    updateStoreApp(id, payload) {
+      return request(`/platform/store/apps/${id}`, { method: 'PUT', body: payload });
+    },
+    deleteStoreApp(id) {
+      return request(`/platform/store/apps/${id}`, { method: 'DELETE' });
+    },
+    async uploadStoreAppIcon(appId, file) {
+      const headers = {};
+      const token = getToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const fd = new FormData();
+      fd.append('file', file);
+      const resp = await fetch(`/platform/store/apps/${appId}/icon`, {
+        method: 'POST',
+        headers,
+        body: fd
+      });
+      let data;
+      try { data = await resp.json(); } catch { throw new Error('服务器响应异常'); }
+      if (resp.status === 401 || data.code === 401) {
+        clearSession();
+        if (!location.pathname.endsWith('/login.html')) location.href = '/login.html';
+        throw new Error(data.message || '未登录');
+      }
+      if (data.code !== 0) throw new Error(data.message || '上传失败');
+      return data.data;
+    },
+    listStoreVersions(appId) {
+      return request(`/platform/store/apps/${appId}/versions`);
+    },
+    async createStoreVersion(appId, { versionName, versionCode, file }) {
+      const headers = {};
+      const token = getToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const fd = new FormData();
+      fd.append('version_name', versionName);
+      fd.append('version_code', versionCode);
+      fd.append('file', file);
+      const resp = await fetch(`/platform/store/apps/${appId}/versions`, {
+        method: 'POST',
+        headers,
+        body: fd
+      });
+      let data;
+      try { data = await resp.json(); } catch { throw new Error('服务器响应异常'); }
+      if (resp.status === 401 || data.code === 401) {
+        clearSession();
+        if (!location.pathname.endsWith('/login.html')) location.href = '/login.html';
+        throw new Error(data.message || '未登录');
+      }
+      if (data.code !== 0) throw new Error(data.message || '上传失败');
+      return data.data;
+    },
+    deleteStoreVersion(appId, versionId) {
+      return request(`/platform/store/apps/${appId}/versions/${versionId}`, {
+        method: 'DELETE'
+      });
+    },
+    listStoreProfiles(appId) {
+      return request(`/platform/store/apps/${appId}/profiles`);
+    },
+    createStoreProfile(appId, payload) {
+      return request(`/platform/store/apps/${appId}/profiles`, {
+        method: 'POST',
+        body: payload
+      });
+    },
+    deleteStoreProfile(appId, profileId) {
+      return request(`/platform/store/apps/${appId}/profiles/${profileId}`, {
+        method: 'DELETE'
+      });
+    },
+    async downloadStoreFile(url, filename) {
+      const headers = {};
+      const token = getToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const resp = await fetch(url, { headers });
+      if (resp.status === 401) {
+        clearSession();
+        if (!location.pathname.endsWith('/login.html')) location.href = '/login.html';
+        throw new Error('未登录');
+      }
+      if (!resp.ok) {
+        let msg = '下载失败';
+        try {
+          const j = await resp.json();
+          if (j && j.message) msg = j.message;
+        } catch { /* binary or empty */ }
+        throw new Error(msg);
+      }
+      const blob = await resp.blob();
+      const a = document.createElement('a');
+      const obj = URL.createObjectURL(blob);
+      a.href = obj;
+      a.download = filename || 'download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(obj), 2000);
     }
   };
 })();

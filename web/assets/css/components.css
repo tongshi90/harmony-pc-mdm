@@ -9,6 +9,11 @@
   border-bottom: 1px solid var(--line);
   background: var(--paper);
 }
+/* 我的应用 / 证书：工具栏与下方卡片列表留白 */
+#app-list,
+#cert-list {
+  margin-top: 16px;
+}
 .toolbar.toolbar-standalone {
   margin-bottom: 12px;
   border: 1px solid var(--line);

@@ -609,6 +609,18 @@ def humanize_ingest_error(exc: BaseException | str) -> str:
             "请管理员检查 MDM_RAG_SILICONFLOW_API_KEY 后重试。"
         )
 
+    if (
+        "402" in raw
+        or "insufficient" in low
+        or "account balance" in low
+        or "余额不足" in raw
+        or "arrearage" in low
+    ):
+        return (
+            "SiliconFlow 账户余额不足，无法完成向量化入库。"
+            "请到 SiliconFlow 控制台充值后，删除该文件并重新上传。"
+        )
+
     if "429" in raw or "rate limit" in low or "too many requests" in low:
         return "模型服务请求过于频繁被限流。请稍后再试，或减少同时入库的文件数量。"
 

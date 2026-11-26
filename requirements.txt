@@ -13,6 +13,8 @@ paho-mqtt==2.1.0
 requests==2.32.3
 # RAG：LightRAG 源码已 vendoring 在仓库根目录 lightrag/（含 rag_project），勿再 pip install -e 外部工程
 openai>=2.0.0,<4.0.0
+# openai>=3 默认拉 httpx2，不再带 httpx；lightrag.exceptions / parser 仍直接 import httpx
+httpx>=0.27.0,<1.0.0
 nano-vectordb
 pdfplumber>=0.11.4
 pymupdf>=1.25.0

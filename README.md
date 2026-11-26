@@ -43,7 +43,7 @@ python run.py
 
 | 账号 | 密码 |
 |------|------|
-| `admin` | `Ab12345678` |
+| `admin` | `12345678` |
 
 正式环境请尽快改密；登录页不再展示默认凭据。新建/改密/重置管理员密码须 **6–18 位且同时含字母与数字**。知识库提问需配置 `MDM_RAG_SILICONFLOW_API_KEY`。
 
@@ -63,7 +63,7 @@ python run.py
 docker compose up -d --build
 ```
 
-- 管理台：`http://localhost:8080`（`admin` / `Ab12345678`，仅首次空库）
+- 管理台：`http://localhost:8080`（`admin` / `12345678`，仅首次空库）
 - EMQX Dashboard：`http://localhost:18083`（`admin` / `Nv7Kq2Rm9Xp4Tw6B`）
 - Compose 通过 `MDM_MQTT_HOST=emqx` 等环境变量在首次空库时自动写入 MQTT 配置
 - 知识库需能访问 SiliconFlow（可用 `.env` 设置 `MDM_RAG_SILICONFLOW_API_KEY`）

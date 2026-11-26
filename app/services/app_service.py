@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -31,8 +32,8 @@ def _fmt(dt: datetime | None) -> str | None:
 
 def _ensure_hap(filename: str) -> None:
     name = (filename or "").strip().lower()
-    if not name.endswith(".hap"):
-        raise HTTPException(status_code=400, detail="仅支持上传 .hap 安装包")
+    if not (name.endswith(".hap") or name.endswith(".app") or name.endswith(".sap")):
+        raise HTTPException(status_code=400, detail="仅支持上传 .hap / .app / .sap 安装包")
 
 
 def _ensure_icon(filename: str) -> str:
@@ -189,14 +190,25 @@ def _ensure_unique_version_fields(
 
 
 def create_app(db: Session, data) -> dict:
-    code = data.app_code.strip()
-    if db.query(AppBase).filter(AppBase.app_code == code).first():
-        raise HTTPException(status_code=400, detail="应用编码已存在")
-    biz_app_id = data.app_id.strip()
-    bundle_name = data.bundle_name.strip()
-    _ensure_unique_app_identifiers(db, app_id=biz_app_id, bundle_name=bundle_name)
+    """新建应用实体（不创建版本）；App ID / 应用编码由平台生成，安装包在版本页上传."""
+    bundle_name = (data.bundle_name or "").strip()
+    if not bundle_name:
+        raise HTTPException(status_code=400, detail="请填写 Bundle Name")
+    if db.query(AppBase).filter(AppBase.bundle_name == bundle_name).first():
+        raise HTTPException(status_code=400, detail="Bundle Name 已存在")
+
     now = local_now()
     pk = snowflake_id()
+    # 端侧 AppIdentifier：云侧雪花 ID 字符串，全局唯一
+    biz_app_id = str(pk)
+    # 应用编码：优先用 Bundle Name；若与历史编码冲突则加雪花后缀
+    code = bundle_name
+    if len(code) > 64:
+        code = code[:64]
+    if db.query(AppBase).filter(AppBase.app_code == code).first():
+        suffix = str(pk)[-8:]
+        code = f"{bundle_name[:55]}_{suffix}"[:64]
+
     app = AppBase(
         id=pk,
         app_name=data.app_name.strip(),
@@ -209,19 +221,6 @@ def create_app(db: Session, data) -> dict:
         update_time=now,
     )
     db.add(app)
-    vid = snowflake_id()
-    db.add(
-        AppVersion(
-            id=vid,
-            app_id=pk,
-            version_name=data.version_name.strip(),
-            version_code=data.version_code.strip(),
-            status=2,  # 首版本默认已发布
-            publish_time=now,
-            create_time=now,
-            update_time=now,
-        )
-    )
     db.commit()
     return get_app(db, pk)
 
@@ -507,8 +506,36 @@ def delete_version(db: Session, app_id: int, version_id: int) -> None:
     db.commit()
 
 
+def _apply_package_file(v: AppVersion, dest: Path, *, safe_name: str | None = None) -> None:
+    """用本地文件刷新版本包元数据（路径相对 DATA_DIR）。"""
+    name = safe_name or dest.name
+    md5 = hashlib.md5()
+    size = 0
+    with dest.open("rb") as f:
+        while True:
+            chunk = f.read(1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            md5.update(chunk)
+    if v.file_path:
+        old = DATA_DIR / v.file_path
+        if old.is_file() and old.resolve() != dest.resolve():
+            old.unlink(missing_ok=True)
+    v.file_name = name
+    v.file_path = dest.relative_to(DATA_DIR).as_posix()
+    v.file_size = size
+    v.file_md5 = md5.hexdigest()
+    v.update_time = local_now()
+
+
 async def upload_package(
-    db: Session, app_id: int, version_id: int, file: UploadFile
+    db: Session,
+    app_id: int,
+    version_id: int,
+    file: UploadFile,
+    *,
+    resign: bool = False,
 ) -> dict:
     v = (
         db.query(AppVersion)
@@ -526,34 +553,70 @@ async def upload_package(
     safe_name = Path(filename).name
     dest = dest_dir / safe_name
 
-    md5 = hashlib.md5()
-    size = 0
     with dest.open("wb") as out:
         while True:
             chunk = await file.read(1024 * 1024)
             if not chunk:
                 break
-            size += len(chunk)
-            md5.update(chunk)
             out.write(chunk)
 
-    # 删除旧文件（若文件名不同）
-    if v.file_path:
-        old = DATA_DIR / v.file_path
-        if old.is_file() and old.resolve() != dest.resolve():
-            old.unlink(missing_ok=True)
-
-    rel = dest.relative_to(DATA_DIR).as_posix()
-    v.file_name = safe_name
-    v.file_path = rel
-    v.file_size = size
-    v.file_md5 = md5.hexdigest()
-    v.update_time = local_now()
+    _apply_package_file(v, dest, safe_name=safe_name)
     app = db.query(AppBase).filter(AppBase.id == app_id).first()
     if app:
         app.update_time = local_now()
     db.commit()
+
+    if resign:
+        return resign_package(db, app_id, version_id)
     return get_version(db, app_id, version_id)
+
+
+def resign_package(db: Session, app_id: int, version_id: int) -> dict:
+    """模式 2 hapResign：对已上传安装包解包并用平台密钥重签，覆盖版本包."""
+    from app.services import store_sign
+
+    app = db.query(AppBase).filter(AppBase.id == app_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="应用不存在")
+    bundle = (app.bundle_name or "").strip()
+    if not bundle:
+        raise HTTPException(status_code=400, detail="请先完善应用 Bundle Name")
+
+    v = (
+        db.query(AppVersion)
+        .filter(AppVersion.id == version_id, AppVersion.app_id == app_id)
+        .first()
+    )
+    if not v:
+        raise HTTPException(status_code=404, detail="应用版本不存在")
+    if not v.file_path:
+        raise HTTPException(status_code=400, detail="该版本尚未上传安装包")
+    src = DATA_DIR / v.file_path
+    if not src.is_file():
+        raise HTTPException(status_code=400, detail="安装包文件不存在")
+
+    work = store_sign.sign_dir() / "work" / "resign" / str(app_id) / str(version_id) / uuid.uuid4().hex
+    dest_dir = UPLOAD_ROOT / str(app_id) / str(version_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out_name = Path(v.file_name or src.name).stem
+    if out_name.startswith("unsign-"):
+        out_name = out_name[len("unsign-") :]
+    out_hap = dest_dir / f"{out_name}-signed.hap"
+    try:
+        store_sign.hap_resign(
+            src,
+            bundle_name=bundle,
+            work_dir=work,
+            out_hap=out_hap,
+            version_code=v.version_code or "1",
+            version_name=v.version_name or "1.0.0",
+        )
+        _apply_package_file(v, out_hap, safe_name=out_hap.name)
+        app.update_time = local_now()
+        db.commit()
+        return get_version(db, app_id, version_id)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 async def upload_icon(db: Session, app_id: int, file: UploadFile) -> dict:

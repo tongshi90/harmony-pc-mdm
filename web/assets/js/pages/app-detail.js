@@ -20,6 +20,9 @@
   let installPage = 1;
   const installPageSize = 20;
   let installKeyword = '';
+  let profiles = [];
+  let profilesError = '';
+  let certOptions = [];
 
   const esc = str => String(str == null ? '' : str)
     .replace(/&/g, '&amp;')
@@ -52,6 +55,68 @@
     } catch (e) {
       installData = { summary: null, items: [], total: 0, error: e.message || '加载失败' };
     }
+  }
+
+  async function loadProfiles() {
+    try {
+      profiles = (await MDMApi.listAppProfiles(app.id)) || [];
+      profilesError = '';
+    } catch (e) {
+      profiles = [];
+      profilesError = e.message || '加载 Profile 失败';
+    }
+  }
+
+  async function loadCertOptions() {
+    try {
+      certOptions = (await MDMApi.listAppCertOptions()) || [];
+    } catch {
+      certOptions = [];
+    }
+  }
+
+  function profileStatusBadge(p) {
+    return Number(p.profile_status) === 1
+      ? U.badgeStatus('published')
+      : '<span class="badge badge-off">失效</span>';
+  }
+
+  function profilesPanelHtml() {
+    if (profilesError) {
+      return `<div class="text-muted">${esc(profilesError)}</div>`;
+    }
+    return `
+      <div class="form-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <span>Profile</span>
+        <button type="button" class="btn btn-sm btn-primary" id="btn-add-profile">+ 生成 Profile</button>
+      </div>
+      <div class="card-grid">${profiles.length ? profiles.map(p => `
+        <div class="entity-card version-card">
+          <div class="entity-card-badges">${profileStatusBadge(p)}</div>
+          <div class="entity-card-head entity-card-head--vcenter">
+            <div>
+              <div class="entity-title entity-title-ellipsis" title="${esc(p.profile_name || '')}">${esc(p.profile_name || '—')}</div>
+              <div class="entity-sub">证书 ${esc(p.cert_name || '—')}</div>
+            </div>
+          </div>
+          <div class="entity-card-body">
+            <div class="entity-stats">
+              <span>文件 <strong>${p.has_file ? (esc(p.file_name || '已生成') + (p.file_size != null ? ` · ${fmtSize(p.file_size)}` : '')) : '无文件'}</strong></span>
+              <span>过期 <strong>${esc(p.expiration_date || '—')}</strong></span>
+            </div>
+          </div>
+          <div class="entity-card-foot">
+            <div class="entity-card-actions-main">
+              ${p.download_url
+                ? `<button type="button" class="btn btn-sm btn-primary btn-dl-profile" data-url="${esc(p.download_url)}" data-name="${esc(p.file_name || 'profile.p7b')}">下载</button>`
+                : `<button type="button" class="btn btn-sm" disabled>下载</button>`}
+            </div>
+            <div class="entity-card-actions-more">
+              <button type="button" class="btn btn-sm btn-link btn-text-danger btn-del-profile" data-id="${esc(p.id)}" data-name="${esc(p.profile_name)}">删除</button>
+            </div>
+          </div>
+        </div>`).join('') : '<div class="text-muted">暂无 Profile，请生成</div>'}
+      </div>`;
   }
 
   function versionsBlockHtml() {
@@ -148,11 +213,11 @@
     `;
   }
 
-  await loadInstalls();
+  await Promise.all([loadInstalls(), loadProfiles(), loadCertOptions()]);
 
   MDMLayout.mount({
     pageId: 'app-detail',
-    title: '应用管理',
+    title: '我的应用',
     content: `
       <div class="detail-header">
         <div style="display:flex;align-items:center;gap:14px;min-width:0">
@@ -173,11 +238,13 @@
       <div id="tabs-wrap">
         <div class="tabs">
           <div class="tab-item active" data-tab="basic">基本信息</div>
+          <div class="tab-item" data-tab="versions">应用版本</div>
+          <div class="tab-item" data-tab="profiles">Profile</div>
           <div class="tab-item" data-tab="installs">安装情况</div>
         </div>
         <div class="tab-panel active" data-panel="basic">
           <div class="panel"><div class="panel-body">
-            <table class="kv-table" style="margin-bottom:16px"><tbody>
+            <table class="kv-table"><tbody>
               <tr><th>应用图标</th><td>${U.appIconHtml(app, { size: 40, className: 'app-icon app-icon-sm' })}</td></tr>
               <tr><th>应用名称</th><td>${esc(app.app_name || '—')}</td></tr>
               <tr><th>应用编码</th><td><code>${esc(app.app_code || '—')}</code></td></tr>
@@ -187,7 +254,16 @@
               <tr><th>描述</th><td style="white-space:pre-wrap">${esc(app.description || '—')}</td></tr>
               ${app.update_time ? `<tr><th>更新时间</th><td>${esc(app.update_time)}</td></tr>` : ''}
             </tbody></table>
+          </div></div>
+        </div>
+        <div class="tab-panel" data-panel="versions">
+          <div class="panel"><div class="panel-body">
             ${versionsBlockHtml()}
+          </div></div>
+        </div>
+        <div class="tab-panel" data-panel="profiles">
+          <div class="panel"><div class="panel-body" id="profiles-wrap">
+            ${profilesPanelHtml()}
           </div></div>
         </div>
         <div class="tab-panel" data-panel="installs">
@@ -197,11 +273,115 @@
     onMount() {
       const tabsWrap = document.getElementById('tabs-wrap');
       U.initTabs(tabsWrap);
+      const syncTabUrl = tab => {
+        const url = new URL(location.href);
+        if (tab && tab !== 'basic') url.searchParams.set('tab', tab);
+        else url.searchParams.delete('tab');
+        history.replaceState(null, '', url.pathname + url.search + url.hash);
+      };
+      tabsWrap.querySelectorAll('.tab-item').forEach(tab => {
+        tab.addEventListener('click', () => syncTabUrl(tab.dataset.tab));
+      });
       const activeTab = U.query('tab');
       if (activeTab) {
         const tabEl = tabsWrap.querySelector(`.tab-item[data-tab="${activeTab}"]`);
         if (tabEl) tabEl.click();
       }
+      const reloadStayTab = () => {
+        const tab =
+          tabsWrap.querySelector('.tab-item.active')?.dataset.tab ||
+          U.query('tab') ||
+          'basic';
+        location.href = U.href('appDetail', { id: app.id, tab: tab === 'basic' ? '' : tab });
+      };
+
+      const profilesWrap = document.getElementById('profiles-wrap');
+      async function refreshProfiles() {
+        await loadProfiles();
+        if (profilesWrap) profilesWrap.innerHTML = profilesPanelHtml();
+        bindProfiles();
+      }
+      async function openAddProfile() {
+        if (!(app.bundle_name || '').trim()) {
+          U.toast('请先完善应用 Bundle Name', 'error');
+          return;
+        }
+        await loadCertOptions();
+        const usable = (certOptions || []).filter(c => c.has_pem);
+        if (!usable.length) {
+          U.toast('请先在「证书」中新增可用证书', 'error');
+          return;
+        }
+        const certOpts = usable.map(c =>
+          `<option value="${esc(c.id)}">${esc(c.cert_name)}${c.expiration_date ? `（至 ${esc(c.expiration_date)}）` : ''}</option>`
+        ).join('');
+        U.modal({
+          title: '生成 Profile',
+          size: 'md',
+          okText: '生成',
+          body: `
+            <div class="form-item" style="margin-bottom:16px">
+              <label class="form-label">Profile 名称 <span style="color:var(--error)">*</span></label>
+              <input id="profile-name" class="form-input" maxlength="128" placeholder="如 app1-profile" value="app1-profile">
+            </div>
+            <div class="form-item" style="margin-bottom:0">
+              <label class="form-label">证书 <span style="color:var(--error)">*</span></label>
+              <select id="profile-cert" class="form-input">${certOpts}</select>
+            </div>
+            <p id="profile-err" style="display:none;margin:12px 0 0;font-size:12px;color:var(--error)"></p>`,
+          onOk: async () => {
+            const profileName = (document.getElementById('profile-name')?.value || '').trim();
+            const certId = document.getElementById('profile-cert')?.value;
+            const err = document.getElementById('profile-err');
+            const showErr = (m) => {
+              if (err) { err.style.display = 'block'; err.textContent = m; }
+            };
+            if (err) { err.style.display = 'none'; err.textContent = ''; }
+            if (!profileName) { showErr('请填写 Profile 名称'); return false; }
+            if (!certId) { showErr('请选择证书'); return false; }
+            try {
+              await MDMApi.createAppProfile(app.id, {
+                profile_name: profileName,
+                cert_id: certId
+              });
+              U.toast('Profile 已生成');
+              await refreshProfiles();
+              return true;
+            } catch (e) {
+              showErr(e.message || '生成失败');
+              return false;
+            }
+          }
+        });
+      }
+
+      function bindProfiles() {
+        document.getElementById('btn-add-profile')?.addEventListener('click', openAddProfile);
+        document.querySelectorAll('.btn-dl-profile').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              await MDMApi.downloadStoreFile(btn.dataset.url, btn.dataset.name || 'profile.p7b');
+            } catch (e) {
+              U.toast(e.message || '下载失败', 'error');
+            }
+          });
+        });
+        document.querySelectorAll('.btn-del-profile').forEach(btn => {
+          btn.addEventListener('click', () => {
+            U.confirm(`确认删除 Profile「${btn.dataset.name || ''}」？`, async () => {
+              try {
+                await MDMApi.deleteAppProfile(app.id, btn.dataset.id);
+                U.toast('已删除');
+                await refreshProfiles();
+              } catch (e) {
+                U.toast(e.message || '删除失败', 'error');
+              }
+            });
+          });
+        });
+      }
+      bindProfiles();
+
 
       document.querySelectorAll('.btn-toggle-ver-status').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -213,7 +393,7 @@
             try {
               await MDMApi.updateAppVersion(app.id, btn.dataset.id, { status: next });
               U.toast(`已${action}`);
-              location.reload();
+              reloadStayTab();
             } catch (e) {
               U.toast(e.message || '操作失败', 'error');
             }
@@ -227,7 +407,7 @@
             try {
               await MDMApi.deleteAppVersion(app.id, btn.dataset.id);
               U.toast('已删除');
-              location.reload();
+              reloadStayTab();
             } catch (e) {
               U.toast(e.message || '删除失败', 'error');
             }

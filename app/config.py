@@ -121,6 +121,31 @@ class Settings(BaseSettings):
     rag_gen_chunk_max_tokens: int = 2500
     rag_gen_total_max_tokens: int = 8000
 
+    # ==================================================================
+    # 应用商店调试（模块：app/api/store.py · app/services/store_sign.py）
+    # 对齐 hm-appstore 的 Cert / Profile；材料默认放 data/sign/
+    # ==================================================================
+    # 签名工具目录（绝对路径，或相对 data/）：需含 hap-sign-tool.jar、OpenHarmony.p12、
+    # OpenHarmonyProfileRelease.pem（CSR 签发仅需 OpenHarmony.p12）
+    # 模式 2 hapResign 另需 openvalley.pem（或 MDM_STORE_APP_CERT_FILE）
+    # 环境变量：MDM_STORE_SIGN_DIR
+    store_sign_dir: str = "sign"
+    # java / keytool 可执行文件（空=PATH 中查找）
+    store_java_bin: str = ""
+    store_keytool_bin: str = ""
+    store_sign_timeout_seconds: int = 300
+    # Profile issuer；空则用内置 OpenValley CA 文案
+    store_issuer: str = ""
+    # CSR 签发时追加的 Root CA PEM；空则读 data/sign/root.cer 或内置默认
+    store_root_cert: str = ""
+    # 模式 2：平台应用证文件名（相对 sign 目录）与 p12 别名/口令
+    store_app_cert_file: str = "openvalley.pem"
+    store_app_key_alias: str = "openvalley"
+    store_app_key_pwd: str = "123456"
+    store_keystore_pwd: str = "123456"
+    # sign-app 的 compatibleVersion（hap 必填）；可用 MDM_STORE_COMPATIBLE_VERSION 覆盖
+    store_compatible_version: str = "9"
+
     class Config:
         env_prefix = "MDM_"
 

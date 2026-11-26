@@ -13,12 +13,13 @@ from app.schemas.app_pkg import (
     AppBatchInstallIn,
     AppBatchUninstallIn,
     AppCreate,
+    AppProfileCreate,
     AppUpdate,
     AppVersionCreate,
     AppVersionUpdate,
 )
 from app.schemas.common import ok
-from app.services import app_batch_service, app_service, department_service
+from app.services import app_batch_service, app_profile_service, app_service, department_service
 
 router = APIRouter(dependencies=[Depends(require_menu(MenuCode.APP))])
 # 安装包下载：免登录（AuthGuard 已放行；不挂菜单依赖）
@@ -33,6 +34,28 @@ def list_target_groups(
 ):
     """批量安装/卸载用的分组列表（应用菜单权限即可）."""
     return ok(department_service.list_departments(db, keyword))
+
+
+@router.get("/cert-options")
+def list_cert_options(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_menu(MenuCode.APP)),
+):
+    """Profile 生成用的证书下拉（只读；完整证书管理在「证书」菜单）."""
+    from app.services import store_service
+
+    rows = store_service.list_certs(db)
+    return ok(
+        [
+            {
+                "id": r["id"],
+                "cert_name": r.get("cert_name") or "",
+                "has_pem": bool(r.get("has_pem")),
+                "expiration_date": r.get("expiration_date") or "",
+            }
+            for r in rows
+        ]
+    )
 
 
 @router.get("")
@@ -228,10 +251,27 @@ async def upload_package(
     app_id: int,
     version_id: int,
     file: UploadFile = File(...),
+    resign: bool = Query(False, description="上传后执行平台 hapResign 重签"),
     db: Session = Depends(get_db),
     _: User = Depends(require_menu(MenuCode.APP)),
 ):
-    return ok(await app_service.upload_package(db, app_id, version_id, file))
+    return ok(
+        await app_service.upload_package(
+            db, app_id, version_id, file, resign=resign
+        )
+    )
+
+
+@router.post("/{app_id}/versions/{version_id}/resign")
+@audit_log(module="我的应用", action="平台重签安装包")
+def resign_package(
+    app_id: int,
+    version_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_menu(MenuCode.APP)),
+):
+    """模式 2 hapResign：解包 + 平台证书 Profile + sign-app，覆盖版本包."""
+    return ok(app_service.resign_package(db, app_id, version_id))
 
 
 @public_router.get("/{app_id}/icon")
@@ -273,3 +313,61 @@ def clear_icon(
     _: User = Depends(require_menu(MenuCode.APP)),
 ):
     return ok(app_service.clear_icon(db, app_id))
+
+
+# ---------- Profile（复用「证书」中的 t_store_cert） ----------
+
+
+@router.get("/{app_id}/profiles")
+def list_app_profiles(
+    app_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_menu(MenuCode.APP)),
+):
+    return ok(app_profile_service.list_profiles(db, app_id))
+
+
+@router.post("/{app_id}/profiles")
+@audit_log(module="我的应用", action="新增应用 Profile")
+def create_app_profile(
+    app_id: int,
+    body: AppProfileCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_menu(MenuCode.APP)),
+):
+    return ok(
+        app_profile_service.add_profile(
+            db,
+            app_id,
+            profile_name=body.profile_name,
+            cert_id=body.cert_id,
+        )
+    )
+
+
+@router.delete("/{app_id}/profiles/{profile_id}")
+@audit_log(module="我的应用", action="删除应用 Profile")
+def delete_app_profile(
+    app_id: int,
+    profile_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_menu(MenuCode.APP)),
+):
+    app_profile_service.delete_profile(db, app_id, profile_id)
+    return ok()
+
+
+@router.get("/{app_id}/profiles/{profile_id}/file")
+@no_audit
+def download_app_profile(
+    app_id: int,
+    profile_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_menu(MenuCode.APP)),
+):
+    path, filename = app_profile_service.get_profile_file_path(db, app_id, profile_id)
+    return FileResponse(
+        path,
+        filename=filename,
+        media_type="application/octet-stream",
+    )

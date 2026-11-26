@@ -17,8 +17,13 @@ window.MDM = {
       { id: 'device', code: 'device', label: '设备管理', href: '/pages/devices/devices.html' },
       { id: 'member', code: 'member', label: '人员管理', href: '/pages/members/members.html' },
       { id: 'member_group', code: 'member_group', label: '成员分组', href: '/pages/members/groups.html' },
-      { id: 'app', code: 'app', label: '应用管理', href: '/pages/apps/apps.html' },
-      { id: 'policy_dispatch', code: 'policy_dispatch', label: '策略记录', href: '/pages/scenes/scene-dispatch.html' },
+      { id: 'policy_dispatch', code: 'policy_dispatch', label: '策略记录', href: '/pages/scenes/scene-dispatch.html' }
+    ]},
+    { group: '应用管理', items: [
+      { id: 'app_cert', code: 'app_cert', label: '证书', href: '/pages/apps/certs.html' },
+      { id: 'app', code: 'app', label: '我的应用', href: '/pages/apps/apps.html' }
+    ]},
+    { group: '知识库问答', items: [
       { id: 'rag', code: 'rag', label: '知识库问答', href: '/pages/rag/knowledge-bases.html' }
     ]},
     { group: '平台', items: [

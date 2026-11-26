@@ -13,9 +13,11 @@ class MenuCode(str, Enum):
     DEVICE = "device"
     MEMBER = "member"
     MEMBER_GROUP = "member_group"
+    APP_CERT = "app_cert"
     APP = "app"
     POLICY_DISPATCH = "policy_dispatch"
     RAG = "rag"
+    STORE = "store"
     PLATFORM = "platform"
 
 
@@ -71,12 +73,22 @@ _MENU_ITEMS: tuple[MenuItem, ...] = (
         sort=40,
     ),
     MenuItem(
+        code=MenuCode.APP_CERT.value,
+        name="证书",
+        # 证书接口仍挂在 /platform/store/certs（复用 store_service）
+        api_prefix="/platform/store",
+        nav_id="app_cert",
+        href="/pages/apps/certs.html",
+        group="应用管理",
+        sort=48,
+    ),
+    MenuItem(
         code=MenuCode.APP.value,
-        name="应用管理",
+        name="我的应用",
         api_prefix="/platform/app",
         nav_id="app",
         href="/pages/apps/apps.html",
-        group="终端资源",
+        group="应用管理",
         sort=50,
     ),
     MenuItem(
@@ -94,8 +106,19 @@ _MENU_ITEMS: tuple[MenuItem, ...] = (
         api_prefix="/platform/rag",
         nav_id="rag",
         href="/pages/rag/knowledge-bases.html",
-        group="知识服务",
+        group="知识库问答",
         sort=65,
+    ),
+    MenuItem(
+        code=MenuCode.STORE.value,
+        name="应用商店调试",
+        # 侧栏隐藏；前缀改开以免与「证书」抢鉴权匹配
+        api_prefix="/platform/store-legacy",
+        nav_id="store",
+        href="/pages/store/index.html",
+        group="调试工具",
+        sort=68,
+        visible=False,
     ),
     MenuItem(
         code=MenuCode.PLATFORM.value,

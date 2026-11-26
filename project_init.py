@@ -171,7 +171,7 @@ def main() -> int:
     print()
     print("=" * 60)
     print("[done] 项目已恢复为初始状态。可执行 .\\start.ps1 启动服务。")
-    print(f"登录：{settings.default_admin_username} / Ab12345678（首次种子；改密后不被覆盖）")
+    print(f"登录：{settings.default_admin_username} / 12345678（首次种子；改密后不被覆盖）")
     print("=" * 60)
     return 0
 

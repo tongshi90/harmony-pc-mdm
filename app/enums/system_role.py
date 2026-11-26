@@ -21,6 +21,7 @@ _SEC_CONFIDENTIAL_MENUS = (
     MenuCode.DEVICE.value,
     MenuCode.MEMBER.value,
     MenuCode.MEMBER_GROUP.value,
+    MenuCode.APP_CERT.value,
     MenuCode.APP.value,
     MenuCode.POLICY_DISPATCH.value,
 )

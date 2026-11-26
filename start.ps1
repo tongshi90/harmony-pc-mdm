@@ -63,7 +63,7 @@ Stop-PortListeners -Port $Port
 
 Write-Host ""
 Write-Host "Starting MDM at http://localhost:$Port ..."
-Write-Host "Default account: admin / Ab12345678 (first seed only)"
+Write-Host "Default account: admin / 12345678 (first seed only)"
 Write-Host "Hot reload: ON (Python changes under app/ auto-restart)"
 Write-Host "Frontend: edit web/ then refresh browser (Ctrl+F5)"
 Write-Host "Stop: Ctrl+C in this terminal"

@@ -114,7 +114,7 @@ def _stage_file_for_ingest(kb_id: str | int, file_path: str | Path) -> Path:
     return dest
 
 
-def _siliconflow_base_url() -> str:
+def _openai_compatible_base_url() -> str:
     """从 app.config 的 chat/embedding URL 推导 OpenAI 兼容 base（…/v1）。"""
     for raw in (settings.rag_chat_url, settings.rag_embedding_url):
         url = (raw or "").strip().rstrip("/")
@@ -129,6 +129,10 @@ def _siliconflow_base_url() -> str:
     raise RuntimeError(
         "无法从 MDM_RAG_CHAT_URL / MDM_RAG_EMBEDDING_URL 推导 base URL，请检查 app.config"
     )
+
+
+# 兼容旧调用名
+_siliconflow_base_url = _openai_compatible_base_url
 
 
 def _api_key() -> str:
@@ -164,9 +168,9 @@ async def _build_rag(kb_id: str | int):
 
     api_key = _api_key()
     if not api_key:
-        raise RuntimeError("未配置 MDM_RAG_SILICONFLOW_API_KEY")
+        raise RuntimeError("未配置 MDM_RAG_SILICONFLOW_API_KEY（RAG 模型 API Key）")
 
-    base_url = _siliconflow_base_url()
+    base_url = _openai_compatible_base_url()
     chat_model = settings.rag_chat_model
     embed_model = settings.rag_embedding_model
     embed_dim = int(settings.rag_embedding_dim or 2560)
@@ -792,7 +796,11 @@ async def _rerank_chunks(
     chunks: list[dict[str, Any]],
     top_k: int,
 ) -> list[dict[str, Any]]:
-    """对合并后的候选切片做 SiliconFlow Rerank，取 top_k。"""
+    """对合并后的候选切片做 Rerank，取 top_k。
+
+    默认走阿里百炼原生 text-rerank（``ali_rerank``）；若配置为
+    SiliconFlow / Cohere 兼容 ``…/rerank``，则回退 ``cohere_rerank``。
+    """
     if not chunks:
         return []
     if len(chunks) <= top_k:
@@ -801,15 +809,18 @@ async def _rerank_chunks(
 
     documents = [_chunk_text(c) for c in chunks]
     try:
-        from lightrag.rerank import cohere_rerank
+        from lightrag.rerank import ali_rerank, cohere_rerank
 
-        results = await cohere_rerank(
+        rerank_url = (settings.rag_rerank_url or "").strip()
+        use_ali = "dashscope.aliyuncs.com" in rerank_url or "/text-rerank/" in rerank_url
+        rerank_fn = ali_rerank if use_ali else cohere_rerank
+        results = await rerank_fn(
             query=question,
             documents=documents,
             top_n=min(top_k, len(documents)),
             api_key=_api_key(),
             model=settings.rag_rerank_model,
-            base_url=settings.rag_rerank_url,
+            base_url=rerank_url,
         )
     except Exception:
         logger.exception("Rerank 调用失败，回退向量顺序截断")

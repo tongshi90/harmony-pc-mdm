@@ -1,4 +1,4 @@
-from app.models.app_pkg import AppBase, AppVersion
+from app.models.app_pkg import AppBase, AppProfile, AppVersion
 from app.models.biz_card import BizCard, BizCardStep
 from app.models.department import SysDepartment, SysMember
 from app.models.device import Device, DeviceAppInstalled
@@ -11,6 +11,7 @@ from app.models.mqtt import SysMqttConfig
 from app.models.op_log import SysOpLog
 from app.models.policy_task import PolicyDeviceTask, PolicyTask, PolicyTaskItem
 from app.models.role import SysRole, SysRoleMenu
+from app.models.store import StoreApp, StoreAppVersion, StoreCert, StoreProfile
 from app.models.user import User, UserToken
 from app.rag.models import RagAskMessage, RagAskSession, RagFile, RagKnowledgeBase
 
@@ -24,6 +25,7 @@ __all__ = [
     "SysOpLog",
     "AppBase",
     "AppVersion",
+    "AppProfile",
     "MdmAppVersion",
     "DevicePolicyExpected",
     "DevicePolicyCurrent",
@@ -39,6 +41,10 @@ __all__ = [
     "PolicyDeviceTask",
     "BizCard",
     "BizCardStep",
+    "StoreCert",
+    "StoreApp",
+    "StoreAppVersion",
+    "StoreProfile",
     "RagKnowledgeBase",
     "RagFile",
     "RagAskSession",

@@ -28,7 +28,7 @@ async function renderApps() {
 
   function cardsHtml() {
     if (loadError) return `<div class="panel"><div class="panel-body text-muted">${loadError}</div></div>`;
-    if (!apps.length) return `<div class="panel"><div class="panel-body text-muted">暂无应用，请新建并上传 HAP 安装包</div></div>`;
+    if (!apps.length) return `<div class="panel"><div class="panel-body text-muted">暂无应用，请先新建应用，再在详情中上传版本安装包</div></div>`;
     return `<div class="card-grid">${apps.map(a => `
       <div class="entity-card">
         <div class="entity-card-badges">${statusBadge(a.status)}</div>
@@ -66,7 +66,7 @@ async function renderApps() {
 
   MDMLayout.mount({
     pageId: 'apps',
-    title: '应用管理',
+    title: '我的应用',
     content: `
       <div class="toolbar">
         <div class="toolbar-left">

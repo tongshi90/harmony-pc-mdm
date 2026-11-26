@@ -68,7 +68,7 @@ python run.py
 
 | 账号 | 密码 |
 |------|------|
-| `admin` | `Ab12345678` |
+| `admin` | `12345678` |
 
 首次启动会自动：创建 `data/mdm.db`、生成 RSA 密钥对（`data/rsa_*.pem`）、写入默认管理员与预置角色（admin 密码以 bcrypt 哈希种子写入，**仅首次创建**；之后启动不覆盖已改密码）。新建/改密/重置管理员密码须 **6–18 位且同时含字母与数字**。MDM Agent 包名由配置 `MDM_AGENT_BUNDLE_NAME`（默认 `com.huawei.mdm.demo`）提供，管理台只维护版本仓库。
 
@@ -138,7 +138,8 @@ harmony-pc-mdm/
 | `/index.html` | 数据看板 | 占位 |
 | `/pages/platform/users.html` | 平台基础管理（管理员 / 角色 / **MDM 版本** / MQTT·日志配置 / 操作日志） | 真实 API |
 | `/pages/platform/user-form.html` | 新建/编辑管理员 | 真实 API |
-| `/pages/apps/apps.html` 等 | 应用仓库、版本、批量安装/卸载 | 真实 API |
+| `/pages/apps/certs.html` | 应用管理 · 证书 | 真实 API |
+| `/pages/apps/apps.html` 等 | 应用管理 · 我的应用（版本 / Profile / 批量安装卸载） | 真实 API |
 | `/pages/members/groups.html` | 成员分组 | 真实 API |
 | `/pages/members/members.html` | 人员管理（含导入） | 真实 API |
 | `/pages/members/initial-policy*.html` | 初始策略模板 | 真实 API |
@@ -192,18 +193,19 @@ harmony-pc-mdm/
 
 定义在 `app/enums/menu.py`：
 
-| 菜单（侧栏/登录默认顺序） | Code | 接口前缀 |
-|------|------|----------|
-| 数据看板 | `dashboard` | `/platform/dashboard` |
-| 设备管理 | `device` | `/platform/device` |
-| 人员管理 | `member` | `/platform/member` |
-| 成员分组 | `member_group` | `/platform/member-group` |
-| 应用管理 | `app` | `/platform/app` |
-| 策略记录 | `policy_dispatch` | `/platform/policy` |
-| 知识库问答 | `rag` | `/platform/rag` |
-| 平台基础管理 | `platform` | `/platform/platform` |
+| 菜单（侧栏/登录默认顺序） | Code | 接口前缀 | 分组 |
+|------|------|----------|------|
+| 数据看板 | `dashboard` | `/platform/dashboard` | 运营监控 |
+| 设备管理 | `device` | `/platform/device` | 终端资源 |
+| 人员管理 | `member` | `/platform/member` | 组织人员 |
+| 成员分组 | `member_group` | `/platform/member-group` | 组织人员 |
+| 证书 | `app_cert` | `/platform/store`（证书接口） | 应用管理 |
+| 我的应用 | `app` | `/platform/app` | 应用管理 |
+| 策略记录 | `policy_dispatch` | `/platform/policy` | 策略中心 |
+| 知识库问答 | `rag` | `/platform/rag` | 知识库问答 |
+| 平台基础管理 | `platform` | `/platform/platform` | 平台管理 |
 
-说明：策略能力内置在 `policy-commands.js`，通过「策略下发 / 初始策略」配置。MDM Agent 版本管理挂在「平台基础管理」Tab，不进应用仓库。
+说明：策略能力内置在 `policy-commands.js`，通过「策略下发 / 初始策略」配置。MDM Agent 版本管理挂在「平台基础管理」Tab，不进应用仓库。旧「应用商店调试」(`store`) 已侧栏隐藏，入口跳转至「证书」。
 
 权限机制：
 
@@ -240,9 +242,17 @@ harmony-pc-mdm/
 
 公开下载：`GET /platform/mdm-app/versions/{id}/package`
 
-### 应用管理 `/platform/app`
+### 我的应用 `/platform/app`
 
-应用 CRUD、图标、版本、HAP 上传、安装覆盖统计、按分组批量安装/卸载（写 `APP_MANAGEMENT` 预期并发 `STRATEGY_PULL`）。
+应用 CRUD、图标、版本、HAP/APP 上传、安装覆盖统计、按分组批量安装/卸载（写 `APP_MANAGEMENT` 预期并发 `STRATEGY_PULL`）；**Profile**（`t_app_profile`）；以及 **模式 2 hapResign**（解包 + 平台 `openvalley` 密钥重签）。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/cert-options` | Profile 用证书下拉（只读） |
+| GET/POST/DELETE | `/{id}/profiles` | Profile 列表 / 生成 / 删除 |
+| GET | `/{id}/profiles/{pid}/file` | 下载 p7b |
+| POST | `/{id}/versions/{vid}/resign` | 平台重签（hapResign） |
+| POST | `/{id}/versions/{vid}/package?resign=true` | 上传后立即重签 |
 
 ### 成员分组 / 初始策略 `/platform/member-group`
 
@@ -293,6 +303,17 @@ harmony-pc-mdm/
 | PUT | `/knowledge-bases/{id}/files/{fid}/chunks/{cid}` | 编辑切片正文并重新向量化 |
 | POST | `/ask` | 管理台调试提问 |
 | POST | `/ask/stream` | 管理台对话 SSE |
+
+### 证书 `/platform/store`（菜单 `app_cert`；对齐 hm-appstore Cert）
+
+签名材料默认放 `data/sign/`（见该目录 README；可用 `MDM_STORE_SIGN_DIR` 改路径）。前端入口：`/pages/apps/certs.html`。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/sign-status` | 签名工具/证书材料是否就绪 |
+| GET/POST/DELETE | `/certs` · `/certs/{id}` | 应用证书列表 / 新增（`.csr`→keytool 签发，或直接 `.cer`）/ 删除 |
+
+遗留商店应用/版本/Profile 接口仍挂本前缀，侧栏已隐藏；业务 Profile 请用「我的应用」`/platform/app/{id}/profiles`。
 
 ### 企业对接 `/openapi/*`（免鉴权，暂无签名）
 
@@ -363,6 +384,9 @@ Topic 按设备 SN 路由（见 `app/mqtt`）。Broker 配置在平台基础管�
 | `t_biz_card` / `t_biz_card_step` | 业务卡片主表 / 步骤 |
 | `t_rag_knowledge_base` / `t_rag_file` | 知识库与文件元数据 |
 | `t_rag_ask_session` / `t_rag_ask_message` | 设备侧问答会话与消息 |
+| `t_store_cert` | 应用管理 · 证书 |
+| `t_app_profile` | 我的应用 · Profile（关联 `t_app_base` + `t_store_cert`） |
+| `t_store_app` / `t_store_app_version` / `t_store_profile` | 旧商店调试遗留表（侧栏已隐藏） |
 
 设备合规：`t_device.is_compliant`、`policy_diff_count`（预期 vs 当前快照，含 `APP_MANAGEMENT` 与已装应用比对）。
 
